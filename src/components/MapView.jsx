@@ -6,22 +6,31 @@ import { densestArea } from '../lib/geo'
 
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
 // and the colour can encode status directly.
+//   gold  — still want to go
+//   green — visited and rated
+//   coral — visited but not rated yet, i.e. owes a verdict
+const PIN_COLORS = { want_to_go: '#E8A33D', visited: '#8FAE7C', unrated: '#C4432E' }
+
+function pinTone(entry) {
+  if (entry.status !== 'visited') return 'want_to_go'
+  return entry.rating ? 'visited' : 'unrated'
+}
+
 const iconCache = new Map()
-function pinIcon(status) {
-  if (!iconCache.has(status)) {
-    const color = status === 'visited' ? '#2f9e5f' : '#e08b28'
+function pinIcon(tone) {
+  if (!iconCache.has(tone)) {
     iconCache.set(
-      status,
+      tone,
       L.divIcon({
         className: 'pin-wrapper',
-        html: `<span class="pin" style="--pin-color:${color}"></span>`,
+        html: `<span class="pin" style="--pin-color:${PIN_COLORS[tone]}"></span>`,
         iconSize: [22, 22],
         iconAnchor: [11, 22],
         popupAnchor: [0, -20],
       }),
     )
   }
-  return iconCache.get(status)
+  return iconCache.get(tone)
 }
 
 const meIcon = L.divIcon({
@@ -132,9 +141,11 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
   return (
     <MapContainer center={FALLBACK_CENTER} zoom={CITY_ZOOM} className="map" scrollWheelZoom>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
+        maxZoom={20}
+        detectRetina /* fills the {r} slot with @2x on high-DPI screens */
       />
       <InitialView entries={entries} me={me} />
       <FocusOnSelection focus={focus} />
@@ -151,7 +162,7 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
           <Marker
             key={entry.id}
             position={[entry.place.lat, entry.place.lng]}
-            icon={pinIcon(entry.status)}
+            icon={pinIcon(pinTone(entry))}
             eventHandlers={{ click: () => onSelect(entry) }}
           >
             <Popup>

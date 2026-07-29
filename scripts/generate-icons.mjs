@@ -16,9 +16,9 @@ const OUTPUTS = [
   { name: 'icon-maskable-512.png', size: 512, maskable: true },
 ]
 
-const BG = [20, 20, 26]
-const PIN = [224, 139, 40]
-const HOLE = [20, 20, 26]
+const BG = [26, 20, 16] // #1A1410
+const PIN = [232, 163, 61] // #E8A33D
+const HOLE = [26, 20, 16]
 const SS = 4 // supersampling factor, for antialiased edges
 
 function roundedSquare(x, y, size, radius) {

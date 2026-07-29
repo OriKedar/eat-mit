@@ -18,8 +18,8 @@ export default defineConfig({
         scope: '/eat-mit/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#14141a',
-        theme_color: '#14141a',
+        background_color: '#1A1410',
+        theme_color: '#1A1410',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -38,10 +38,10 @@ export default defineConfig({
           {
             // Map tiles: serve from cache when possible, refresh in background.
             // Makes a revisited area usable with no connection.
-            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
+            urlPattern: /^https:\/\/[a-d]\.basemaps\.cartocdn\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'osm-tiles',
+              cacheName: 'carto-tiles',
               expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },

@@ -1,12 +1,15 @@
 :root {
-  --bg: #14141a;
-  --surface: #1e1e26;
-  --surface-2: #272733;
-  --text: #eceaf2;
-  --muted: #a2a0ae;
-  --accent: #e08b28;
-  --visited: #2f9e5f;
-  --danger: #d4564d;
+  --bg: #1a1410;
+  --surface: #1a1410;
+  --surface-2: #2b221a;
+  --text: #ede6dc;
+  --muted: #9c8e7c;
+  --accent: #e8a33d;
+  --visited: #8fae7c;
+  --danger: #c4432e;
+  --border-subtle: #2e251c;
+  --border-strong: #46372a;
+  --on-accent: #1a1410;
   --radius: 10px;
   color-scheme: dark;
 }
@@ -25,13 +28,22 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 400 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+.entry-name {
+  font-family: Fraunces, Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 button {
   font: inherit;
   cursor: pointer;
-  border: 1px solid #3a3a48;
+  border: 1px solid var(--border-subtle);
   background: var(--surface-2);
   color: var(--text);
   border-radius: var(--radius);
@@ -39,13 +51,13 @@ button {
 }
 
 button:hover {
-  border-color: #55556a;
+  border-color: var(--border-strong);
 }
 
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #16130c;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -68,7 +80,7 @@ select {
   width: 100%;
   padding: 0.55rem 0.7rem;
   background: var(--surface-2);
-  border: 1px solid #3a3a48;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   color: var(--text);
 }
@@ -115,7 +127,7 @@ textarea {
 .auth-card {
   width: min(24rem, 100%);
   background: var(--surface);
-  border: 1px solid #2e2e3a;
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 1.75rem;
 }
@@ -137,7 +149,7 @@ textarea {
 .auth-form button {
   background: var(--accent);
   border-color: var(--accent);
-  color: #16130c;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -170,7 +182,7 @@ textarea {
   gap: 0.75rem;
   padding: 0.7rem 1rem;
   background: var(--surface);
-  border-bottom: 1px solid #2e2e3a;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .topbar h1 {
@@ -219,7 +231,7 @@ textarea {
   width: min(28rem, calc(100% - 2rem));
   padding: 0.6rem 0.75rem 0.6rem 1rem;
   background: var(--surface-2);
-  border: 1px solid #45455a;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
 }
@@ -253,7 +265,7 @@ textarea {
 .skeleton {
   height: 5.5rem;
   border-radius: var(--radius);
-  background: linear-gradient(90deg, var(--surface-2) 25%, #30303d 50%, var(--surface-2) 75%);
+  background: linear-gradient(90deg, var(--surface-2) 25%, #35291f 50%, var(--surface-2) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
@@ -283,7 +295,7 @@ textarea {
 }
 
 .list-pane {
-  border-left: 1px solid #2e2e3a;
+  border-left: 1px solid var(--border-subtle);
   background: var(--surface);
   overflow-y: auto;
   min-height: 0;
@@ -307,7 +319,7 @@ textarea {
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--pin-color);
-  border: 2px solid #10101a;
+  border: 2px solid #1a1410;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
 }
 
@@ -317,12 +329,12 @@ textarea {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: rgb(224 139 40 / 0.85);
-  border: 2px solid #16130c;
-  color: #16130c;
+  background: rgb(232 163 61 / 0.9);
+  border: 2px solid var(--on-accent);
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 0.85rem;
-  box-shadow: 0 0 0 4px rgb(224 139 40 / 0.25);
+  box-shadow: 0 0 0 4px rgb(232 163 61 / 0.22);
 }
 
 .me-dot {
@@ -451,17 +463,17 @@ textarea {
 }
 
 .badge-visited {
-  background: rgb(47 158 95 / 0.18);
+  background: rgb(143 174 124 / 0.18);
   color: var(--visited);
 }
 
 .badge-want_to_go {
-  background: rgb(224 139 40 / 0.18);
+  background: rgb(232 163 61 / 0.18);
   color: var(--accent);
 }
 
 .stars {
-  color: var(--accent);
+  color: var(--danger);
   font-size: 0.85rem;
 }
 
@@ -475,7 +487,7 @@ textarea {
   display: inline-block;
   margin-top: 0.15rem;
   padding: 0.1rem 0.45rem;
-  border: 1px solid #3f3f50;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   color: var(--muted);
   font-size: 0.72rem;
@@ -544,7 +556,7 @@ textarea {
   max-height: 90vh;
   overflow-y: auto;
   background: var(--surface);
-  border: 1px solid #33333f;
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 1.1rem 1.2rem 1.3rem;
 }
@@ -643,7 +655,7 @@ textarea {
   flex: 1;
   text-align: center;
   padding: 0.5rem;
-  border: 1px solid #3a3a48;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -676,11 +688,11 @@ textarea {
   font-size: 1.4rem;
   line-height: 1;
   padding: 0 0.1rem;
-  color: #4a4a5a;
+  color: #574836;
 }
 
 .star.on {
-  color: var(--accent);
+  color: var(--danger);
 }
 
 .field {
@@ -713,7 +725,7 @@ textarea {
     display: grid;
     grid-template-columns: 1fr 1fr;
     background: var(--surface);
-    border-bottom: 1px solid #2e2e3a;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   .mobile-tabs button {
