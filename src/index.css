@@ -306,6 +306,17 @@ textarea {
   width: 100%;
 }
 
+/* Dark Matter is near-black out of the box, which reads as a hole next to the
+   warm chrome. Lifting and warming the tile pane only — markers, popups and
+   controls live in other panes and stay untouched. */
+.map.basemap-dark .leaflet-tile-pane {
+  filter: brightness(1.9) saturate(1.1) sepia(0.14);
+}
+
+.leaflet-container {
+  background: var(--surface-2);
+}
+
 .mobile-tabs {
   display: none;
 }
@@ -363,6 +374,22 @@ textarea {
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.45);
 }
 
+.basemap-button {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 4.6rem;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.45);
+}
+
 .locate-button.locating svg {
   animation: spin 1.1s linear infinite;
 }
@@ -385,13 +412,40 @@ textarea {
   }
 }
 
+/* Leaflet's default popup is a white bubble; restyle it to match the app
+   chrome so it works over either basemap. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.5);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius);
+}
+
+.leaflet-popup-close-button {
+  color: var(--muted) !important;
+}
+
+.leaflet-control-attribution {
+  background: rgb(26 20 16 / 0.75) !important;
+  color: var(--muted);
+}
+
+.leaflet-control-attribution a {
+  color: var(--accent);
+}
+
 .popup-meta {
-  color: #555;
+  color: var(--muted);
   font-size: 0.85em;
 }
 
 .popup-address {
-  color: #666;
+  color: var(--muted);
   font-size: 0.85em;
   margin-top: 0.2em;
 }

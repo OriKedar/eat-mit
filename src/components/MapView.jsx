@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
@@ -48,6 +48,49 @@ function clusterIcon(cluster) {
     className: 'cluster-wrapper',
     iconSize: L.point(size, size, true),
   })
+}
+
+// Both styles come from the same CARTO host, so the service worker's tile
+// cache rule covers either without change.
+const BASEMAPS = {
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    label: 'Switch to the light map',
+  },
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    label: 'Switch to the dark map',
+  },
+}
+const BASEMAP_KEY = 'eat-mit:basemap'
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4.2" fill="currentColor" />
+      <g stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <line x1="12" y1="2.4" x2="12" y2="5" />
+        <line x1="12" y1="19" x2="12" y2="21.6" />
+        <line x1="2.4" y1="12" x2="5" y2="12" />
+        <line x1="19" y1="12" x2="21.6" y2="12" />
+        <line x1="5.5" y1="5.5" x2="7.3" y2="7.3" />
+        <line x1="16.7" y1="16.7" x2="18.5" y2="18.5" />
+        <line x1="5.5" y1="18.5" x2="7.3" y2="16.7" />
+        <line x1="16.7" y1="7.3" x2="18.5" y2="5.5" />
+      </g>
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
 }
 
 const FALLBACK_CENTER = [52.52, 13.405] // Berlin, so an empty map opens somewhere useful
@@ -138,11 +181,27 @@ function DropPinHandler({ onDropPin }) {
 }
 
 export default function MapView({ entries, focus, onSelect, me, locateState, onLocate, onDropPin }) {
+  const [basemap, setBasemap] = useState(
+    () => localStorage.getItem(BASEMAP_KEY) || 'dark',
+  )
+
+  function toggleBasemap() {
+    const next = basemap === 'dark' ? 'light' : 'dark'
+    setBasemap(next)
+    localStorage.setItem(BASEMAP_KEY, next)
+  }
+
   return (
-    <MapContainer center={FALLBACK_CENTER} zoom={CITY_ZOOM} className="map" scrollWheelZoom>
+    <MapContainer
+      center={FALLBACK_CENTER}
+      zoom={CITY_ZOOM}
+      className={`map basemap-${basemap}`}
+      scrollWheelZoom
+    >
       <TileLayer
+        key={basemap}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        url={BASEMAPS[basemap].url}
         subdomains="abcd"
         maxZoom={20}
         detectRetina /* fills the {r} slot with @2x on high-DPI screens */
@@ -191,6 +250,16 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
       )}
 
       <LocateControl state={locateState} onLocate={onLocate} />
+
+      <button
+        type="button"
+        className="basemap-button"
+        onClick={toggleBasemap}
+        title={BASEMAPS[basemap].label}
+        aria-label={BASEMAPS[basemap].label}
+      >
+        {basemap === 'dark' ? <SunIcon /> : <MoonIcon />}
+      </button>
     </MapContainer>
   )
 }
