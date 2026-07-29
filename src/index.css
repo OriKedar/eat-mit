@@ -327,18 +327,36 @@ textarea {
   right: 0.75rem;
   bottom: 1.5rem;
   z-index: 500;
+  display: grid;
+  place-items: center;
   width: 2.6rem;
   height: 2.6rem;
+  padding: 0;
   border-radius: 50%;
-  font-size: 1.2rem;
-  line-height: 1;
   background: var(--surface);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.45);
+}
+
+.locate-button.locating svg {
+  animation: spin 1.1s linear infinite;
 }
 
 .locate-button.error {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .locate-button.locating svg {
+    animation: none;
+    opacity: 0.5;
+  }
 }
 
 .popup-meta {
