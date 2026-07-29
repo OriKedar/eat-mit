@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet'
+import { useEffect, useMemo } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
 
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
@@ -20,6 +21,23 @@ function pinIcon(status) {
     )
   }
   return iconCache.get(status)
+}
+
+const meIcon = L.divIcon({
+  className: 'me-wrapper',
+  html: '<span class="me-dot"></span>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+})
+
+function clusterIcon(cluster) {
+  const count = cluster.getChildCount()
+  const size = count < 10 ? 34 : count < 50 ? 40 : 46
+  return L.divIcon({
+    html: `<span class="cluster-bubble">${count}</span>`,
+    className: 'cluster-wrapper',
+    iconSize: L.point(size, size, true),
+  })
 }
 
 const FALLBACK_CENTER = [52.52, 13.405] // Berlin, so an empty map opens somewhere useful
@@ -46,13 +64,6 @@ function FitBounds({ entries, focus }) {
   return null
 }
 
-const meIcon = L.divIcon({
-  className: 'me-wrapper',
-  html: '<span class="me-dot"></span>',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-})
-
 // Standard "my location" crosshair: ring, centre dot, four ticks.
 function LocateIcon() {
   return (
@@ -69,40 +80,85 @@ function LocateIcon() {
   )
 }
 
-function LocateControl() {
+function LocateControl({ state, onLocate }) {
   const map = useMap()
-  const [me, setMe] = useState(null)
-  const [state, setState] = useState('idle') // idle | locating | error
 
-  function locate() {
-    if (!navigator.geolocation) {
-      setState('error')
-      return
-    }
-    setState('locating')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords
-        setMe({ lat: latitude, lng: longitude, accuracy })
-        setState('idle')
-        map.flyTo([latitude, longitude], Math.max(map.getZoom(), 15), { duration: 0.6 })
-      },
-      () => setState('error'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-    )
+  async function handleClick() {
+    const pos = await onLocate()
+    if (pos) map.flyTo([pos.lat, pos.lng], Math.max(map.getZoom(), 15), { duration: 0.6 })
   }
 
   return (
-    <>
-      <button
-        type="button"
-        className={`locate-button ${state}`}
-        onClick={locate}
-        title={state === 'error' ? "Couldn't get your location" : 'Center on my location'}
-        aria-label="Center on my location"
+    <button
+      type="button"
+      className={`locate-button ${state}`}
+      onClick={handleClick}
+      title={state === 'error' ? "Couldn't get your location" : 'Center on my location'}
+      aria-label="Center on my location"
+    >
+      <LocateIcon />
+    </button>
+  )
+}
+
+// Leaflet fires 'contextmenu' for both right-click and a touch long-press,
+// which is exactly the "drop a pin here" gesture we want.
+function DropPinHandler({ onDropPin }) {
+  useMapEvents({
+    contextmenu(e) {
+      onDropPin({ lat: e.latlng.lat, lng: e.latlng.lng })
+    },
+  })
+  return null
+}
+
+export default function MapView({ entries, focus, onSelect, me, locateState, onLocate, onDropPin }) {
+  const center = useMemo(() => {
+    if (entries.length) return [entries[0].place.lat, entries[0].place.lng]
+    if (me) return [me.lat, me.lng]
+    return FALLBACK_CENTER
+    // Only for the initial render; MapContainer ignores later center changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <MapContainer center={center} zoom={13} className="map" scrollWheelZoom>
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
+      />
+      <FitBounds entries={entries} focus={focus} />
+      <DropPinHandler onDropPin={onDropPin} />
+
+      <MarkerClusterGroup
+        iconCreateFunction={clusterIcon}
+        showCoverageOnHover={false}
+        maxClusterRadius={50}
+        disableClusteringAtZoom={17}
+        spiderfyOnMaxZoom
       >
-        <LocateIcon />
-      </button>
+        {entries.map((entry) => (
+          <Marker
+            key={entry.id}
+            position={[entry.place.lat, entry.place.lng]}
+            icon={pinIcon(entry.status)}
+            eventHandlers={{ click: () => onSelect(entry) }}
+          >
+            <Popup>
+              <strong>{entry.place.name}</strong>
+              <div className="popup-meta">
+                {entry.status === 'visited' ? 'Visited' : 'Want to go'}
+                {entry.rating ? ` · ${'★'.repeat(entry.rating)}` : ''}
+                {entry.place.cuisine ? ` · ${entry.place.cuisine}` : ''}
+              </div>
+              {entry.place.address && <div className="popup-address">{entry.place.address}</div>}
+              {entry.notes && <p className="popup-notes">{entry.notes}</p>}
+            </Popup>
+          </Marker>
+        ))}
+      </MarkerClusterGroup>
+
       {me && (
         <>
           <Circle
@@ -113,43 +169,8 @@ function LocateControl() {
           <Marker position={[me.lat, me.lng]} icon={meIcon} />
         </>
       )}
-    </>
-  )
-}
 
-export default function MapView({ entries, focus, onSelect }) {
-  const center = useMemo(() => {
-    if (entries.length) return [entries[0].place.lat, entries[0].place.lng]
-    return FALLBACK_CENTER
-  }, [entries])
-
-  return (
-    <MapContainer center={center} zoom={13} className="map" scrollWheelZoom>
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-      />
-      <FitBounds entries={entries} focus={focus} />
-      <LocateControl />
-      {entries.map((entry) => (
-        <Marker
-          key={entry.id}
-          position={[entry.place.lat, entry.place.lng]}
-          icon={pinIcon(entry.status)}
-          eventHandlers={{ click: () => onSelect(entry) }}
-        >
-          <Popup>
-            <strong>{entry.place.name}</strong>
-            <div className="popup-meta">
-              {entry.status === 'visited' ? 'Visited' : 'Want to go'}
-              {entry.rating ? ` · ${'★'.repeat(entry.rating)}` : ''}
-            </div>
-            {entry.place.address && <div className="popup-address">{entry.place.address}</div>}
-            {entry.notes && <p className="popup-notes">{entry.notes}</p>}
-          </Popup>
-        </Marker>
-      ))}
+      <LocateControl state={locateState} onLocate={onLocate} />
     </MapContainer>
   )
 }

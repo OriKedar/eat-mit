@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchPlaces } from '../lib/nominatim'
+import { searchPlaces, reverseGeocode } from '../lib/nominatim'
 
 const EMPTY_DETAILS = { status: 'want_to_go', rating: 0, notes: '', photo_url: '' }
 
-// One dialog, two modes:
-//   mode 'add'  — search Nominatim, pick a result, then fill in details
-//   mode 'edit' — place is fixed, only the personal details are editable
-export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
+// One dialog, three modes:
+//   'add'  — search Nominatim, pick a result, then fill in details
+//   'pin'  — coordinates came from a long-press; name it by hand
+//   'edit' — place is fixed, only the personal details are editable
+export default function PlaceDialog({ mode, entry, coords, onClose, onSubmit }) {
   const editing = mode === 'edit'
+  const dropped = mode === 'pin'
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
   const [picked, setPicked] = useState(editing ? entry.place : null)
+  const [resolving, setResolving] = useState(dropped)
 
   const [details, setDetails] = useState(
     editing
@@ -30,9 +33,37 @@ export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
 
   const abortRef = useRef(null)
 
+  // Dropped pin: look up an address for the coordinates, but let the user
+  // proceed with a blank one if Nominatim has nothing there.
+  useEffect(() => {
+    if (!dropped) return
+    let cancelled = false
+    ;(async () => {
+      let resolved = null
+      try {
+        resolved = await reverseGeocode(coords.lat, coords.lng)
+      } catch {
+        // Non-fatal — fall through to an unnamed pin.
+      }
+      if (cancelled) return
+      setPicked({
+        name: '',
+        lat: coords.lat,
+        lng: coords.lng,
+        address: resolved?.address || '',
+        osm_id: null, // hand-placed, so never deduped against an OSM feature
+        cuisine: resolved?.cuisine || '',
+      })
+      setResolving(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [dropped, coords])
+
   // Debounced search — also keeps us well inside Nominatim's 1 req/sec policy.
   useEffect(() => {
-    if (editing || picked) return
+    if (editing || dropped || picked) return
     const q = query.trim()
     if (q.length < 3) {
       setResults([])
@@ -53,7 +84,7 @@ export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [query, picked, editing])
+  }, [query, picked, editing, dropped])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -68,17 +99,21 @@ export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
     }
   }
 
+  const title = editing ? 'Edit entry' : dropped ? 'Add a place here' : 'Add a place'
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>{editing ? 'Edit entry' : 'Add a place'}</h2>
+          <h2>{title}</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
 
-        {!picked ? (
+        {resolving ? (
+          <p className="hint pad">Looking up that spot…</p>
+        ) : !picked ? (
           <div className="search-step">
             <input
               autoFocus
@@ -89,7 +124,10 @@ export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
             {searching && <p className="hint">Searching…</p>}
             {searchError && <p className="error">{searchError}</p>}
             {!searching && query.trim().length >= 3 && !results.length && (
-              <p className="hint">No results. Try adding the city name.</p>
+              <p className="hint">
+                No results. Try adding the city name — or close this and long-press the map where
+                the place is.
+              </p>
             )}
             <ul className="results">
               {results.map((r) => (
@@ -104,15 +142,49 @@ export default function PlaceDialog({ mode, entry, onClose, onSubmit }) {
           </div>
         ) : (
           <form className="details-step" onSubmit={handleSubmit}>
-            <div className="picked">
-              <strong>{picked.name}</strong>
-              {picked.address && <span>{picked.address}</span>}
-              {!editing && (
-                <button type="button" className="link" onClick={() => setPicked(null)}>
-                  Choose a different place
-                </button>
-              )}
-            </div>
+            {dropped ? (
+              <label className="field">
+                Name
+                <input
+                  autoFocus
+                  required
+                  placeholder="What's this place called?"
+                  value={picked.name}
+                  onChange={(e) => setPicked((p) => ({ ...p, name: e.target.value }))}
+                />
+                {picked.address && <span className="sub">{picked.address}</span>}
+              </label>
+            ) : (
+              <div className="picked">
+                <strong>{picked.name}</strong>
+                {picked.address && <span>{picked.address}</span>}
+                {!editing && (
+                  <button type="button" className="link" onClick={() => setPicked(null)}>
+                    Choose a different place
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!editing && (
+              <label className="field">
+                Cuisine (optional)
+                <input
+                  list="cuisine-suggestions"
+                  placeholder="Italian, sushi, ramen…"
+                  value={picked.cuisine || ''}
+                  onChange={(e) => setPicked((p) => ({ ...p, cuisine: e.target.value }))}
+                />
+                <datalist id="cuisine-suggestions">
+                  {['Italian', 'Japanese', 'Sushi', 'Ramen', 'Thai', 'Vietnamese', 'Indian',
+                    'Chinese', 'Korean', 'Mexican', 'Turkish', 'Middle Eastern', 'Greek',
+                    'French', 'German', 'Vegan', 'Pizza', 'Burger', 'Breakfast', 'Bakery',
+                    'Cafe', 'Bar'].map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </label>
+            )}
 
             <fieldset className="status-toggle">
               <legend>Status</legend>

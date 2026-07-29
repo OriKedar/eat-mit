@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import { usePlaces } from './hooks/usePlaces'
 import { useOnline } from './hooks/useOnline'
+import { useGeolocation } from './hooks/useGeolocation'
 import Auth from './components/Auth'
 import MapView from './components/MapView'
 import PlaceList from './components/PlaceList'
@@ -57,8 +58,10 @@ function Home({ session }) {
   const userId = session.user.id
   const { entries, loading, error, refresh, addEntry, updateEntry, deleteEntry } = usePlaces(userId)
   const online = useOnline()
+  const { position: me, state: locateState, locate } = useGeolocation()
 
-  const [dialog, setDialog] = useState(null) // null | {mode:'add'} | {mode:'edit', entry}
+  // null | {mode:'add'} | {mode:'edit', entry} | {mode:'pin', coords}
+  const [dialog, setDialog] = useState(null)
   const [selected, setSelected] = useState(null)
   const [mobileTab, setMobileTab] = useState('map')
 
@@ -109,7 +112,15 @@ function Home({ session }) {
 
       <main className={`layout show-${mobileTab}`}>
         <section className="map-pane">
-          <MapView entries={entries} focus={selected} onSelect={setSelected} />
+          <MapView
+            entries={entries}
+            focus={selected}
+            onSelect={setSelected}
+            me={me}
+            locateState={locateState}
+            onLocate={locate}
+            onDropPin={(coords) => setDialog({ mode: 'pin', coords })}
+          />
         </section>
         <aside className="list-pane">
           {loading && !entries.length ? (
@@ -125,6 +136,7 @@ function Home({ session }) {
               onSelect={setSelected}
               onEdit={(entry) => setDialog({ mode: 'edit', entry })}
               onDelete={handleDelete}
+              me={me}
             />
           ) : (
             <div className="empty-state">
@@ -132,6 +144,7 @@ function Home({ session }) {
               <button className="primary" onClick={() => setDialog({ mode: 'add' })}>
                 Add your first
               </button>
+              <p className="hint">Or long-press anywhere on the map to drop a pin.</p>
             </div>
           )}
         </aside>
@@ -141,6 +154,7 @@ function Home({ session }) {
         <PlaceDialog
           mode={dialog.mode}
           entry={dialog.entry}
+          coords={dialog.coords}
           onClose={() => setDialog(null)}
           onSubmit={(place, details) =>
             dialog.mode === 'edit'

@@ -1,31 +1,54 @@
 import { useMemo, useState } from 'react'
+import { distanceKm, formatDistance } from '../lib/geo'
 
 const SORTS = {
   recent: { label: 'Recently added', cmp: (a, b) => b.created_at.localeCompare(a.created_at) },
   rating: { label: 'Rating', cmp: (a, b) => (b.rating || 0) - (a.rating || 0) },
   name: { label: 'Name', cmp: (a, b) => a.place.name.localeCompare(b.place.name) },
+  distance: {
+    label: 'Distance',
+    // Only offered once we have a fix, so _km is always set when this runs.
+    cmp: (a, b) => a._km - b._km,
+    needsLocation: true,
+  },
 }
 
-export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDelete }) {
+export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDelete, me }) {
   const [statusFilter, setStatusFilter] = useState('all')
+  const [cuisineFilter, setCuisineFilter] = useState('all')
   const [minRating, setMinRating] = useState(0)
   const [sort, setSort] = useState('recent')
   const [query, setQuery] = useState('')
 
+  const cuisines = useMemo(() => {
+    const seen = new Set()
+    for (const e of entries) if (e.place.cuisine) seen.add(e.place.cuisine)
+    return [...seen].sort((a, b) => a.localeCompare(b))
+  }, [entries])
+
+  const withDistance = useMemo(
+    () => entries.map((e) => ({ ...e, _km: me ? distanceKm(me, e.place) : null })),
+    [entries, me],
+  )
+
+  const activeSort = SORTS[sort].needsLocation && !me ? 'recent' : sort
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return entries
+    return withDistance
       .filter((e) => statusFilter === 'all' || e.status === statusFilter)
+      .filter((e) => cuisineFilter === 'all' || e.place.cuisine === cuisineFilter)
       .filter((e) => (e.rating || 0) >= minRating)
       .filter(
         (e) =>
           !q ||
           e.place.name.toLowerCase().includes(q) ||
           (e.place.address || '').toLowerCase().includes(q) ||
+          (e.place.cuisine || '').toLowerCase().includes(q) ||
           (e.notes || '').toLowerCase().includes(q),
       )
-      .sort(SORTS[sort].cmp)
-  }, [entries, statusFilter, minRating, sort, query])
+      .sort(SORTS[activeSort].cmp)
+  }, [withDistance, statusFilter, cuisineFilter, minRating, activeSort, query])
 
   return (
     <div className="list-panel">
@@ -51,13 +74,28 @@ export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDel
             ))}
           </select>
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            {Object.entries(SORTS).map(([key, { label }]) => (
-              <option key={key} value={key}>
+            {Object.entries(SORTS).map(([key, { label, needsLocation }]) => (
+              <option key={key} value={key} disabled={needsLocation && !me}>
                 {label}
+                {needsLocation && !me ? ' (locate first)' : ''}
               </option>
             ))}
           </select>
         </div>
+        {cuisines.length > 0 && (
+          <select
+            className="cuisine-filter"
+            value={cuisineFilter}
+            onChange={(e) => setCuisineFilter(e.target.value)}
+          >
+            <option value="all">Any cuisine</option>
+            {cuisines.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <p className="list-count">
@@ -76,8 +114,12 @@ export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDel
                 {entry.status === 'visited' ? 'Visited' : 'Want to go'}
               </span>
               {entry.rating ? <span className="stars">{'★'.repeat(entry.rating)}</span> : null}
+              {entry._km != null && (
+                <span className="distance">{formatDistance(entry._km)}</span>
+              )}
             </div>
             <h3 className="entry-name">{entry.place.name}</h3>
+            {entry.place.cuisine && <span className="cuisine-tag">{entry.place.cuisine}</span>}
             {entry.place.address && <p className="entry-address">{entry.place.address}</p>}
             {entry.notes && <p className="entry-notes">{entry.notes}</p>}
             <div className="entry-actions">
