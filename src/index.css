@@ -1,0 +1,570 @@
+:root {
+  --bg: #14141a;
+  --surface: #1e1e26;
+  --surface-2: #272733;
+  --text: #eceaf2;
+  --muted: #a2a0ae;
+  --accent: #e08b28;
+  --visited: #2f9e5f;
+  --danger: #d4564d;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid #3a3a48;
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.85rem;
+}
+
+button:hover {
+  border-color: #55556a;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #16130c;
+  font-weight: 600;
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  text-decoration: underline;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid #3a3a48;
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+textarea {
+  resize: vertical;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.pad {
+  padding: 1rem;
+}
+
+/* ---------- boot / auth ---------- */
+
+.boot {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  color: var(--muted);
+  padding: 2rem;
+  text-align: center;
+}
+
+.boot-error {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.auth-screen {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  width: min(24rem, 100%);
+  background: var(--surface);
+  border: 1px solid #2e2e3a;
+  border-radius: 14px;
+  padding: 1.75rem;
+}
+
+.auth-title {
+  margin: 0 0 0.25rem;
+}
+
+.auth-sub {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.auth-form button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #16130c;
+  font-weight: 600;
+}
+
+.auth-google {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+.auth-sent {
+  color: var(--muted);
+}
+
+.auth-error {
+  margin-top: 0.75rem;
+  color: var(--danger);
+}
+
+/* ---------- layout ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid #2e2e3a;
+}
+
+.topbar h1 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.topbar-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.banner {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  background: #3a1f1f;
+}
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 22rem;
+  min-height: 0;
+}
+
+.map-pane {
+  min-height: 0;
+}
+
+.list-pane {
+  border-left: 1px solid #2e2e3a;
+  background: var(--surface);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.map {
+  height: 100%;
+  width: 100%;
+}
+
+.mobile-tabs {
+  display: none;
+}
+
+/* ---------- pins ---------- */
+
+.pin {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--pin-color);
+  border: 2px solid #10101a;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+}
+
+.popup-meta {
+  color: #555;
+  font-size: 0.85em;
+}
+
+.popup-address {
+  color: #666;
+  font-size: 0.85em;
+  margin-top: 0.2em;
+}
+
+.popup-notes {
+  margin: 0.4em 0 0;
+}
+
+/* ---------- list ---------- */
+
+.list-panel {
+  padding: 0.85rem;
+}
+
+.filters {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.filter-row select {
+  padding: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.list-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0.75rem 0 0.4rem;
+}
+
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.entry {
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.7rem 0.8rem;
+  cursor: pointer;
+}
+
+.entry-selected {
+  border-color: var(--accent);
+}
+
+.entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
+.badge-visited {
+  background: rgb(47 158 95 / 0.18);
+  color: var(--visited);
+}
+
+.badge-want_to_go {
+  background: rgb(224 139 40 / 0.18);
+  color: var(--accent);
+}
+
+.stars {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.entry-name {
+  margin: 0.35rem 0 0.1rem;
+  font-size: 1rem;
+}
+
+.entry-address,
+.entry-notes {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.entry-actions button {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.empty {
+  color: var(--muted);
+  padding: 1rem 0;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  padding: 2.5rem 1rem;
+  color: var(--muted);
+}
+
+/* ---------- modal ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(30rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid #33333f;
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem 1.3rem;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.icon-button {
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  color: var(--muted);
+}
+
+.search-step {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.results button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 0.15rem;
+  background: var(--surface-2);
+}
+
+.results span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.details-step {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.picked {
+  display: grid;
+  gap: 0.2rem;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+}
+
+.picked span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.picked .link {
+  justify-self: start;
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+}
+
+.status-toggle {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.status-toggle legend {
+  float: left;
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.status-toggle label {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  border: 1px solid #3a3a48;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.status-toggle label.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stars-input {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.star {
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+  color: #4a4a5a;
+}
+
+.star.on {
+  color: var(--accent);
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.field textarea,
+.field input {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    border-bottom: 1px solid #2e2e3a;
+  }
+
+  .mobile-tabs button {
+    border: none;
+    border-radius: 0;
+    background: none;
+    padding: 0.6rem;
+    color: var(--muted);
+  }
+
+  .mobile-tabs button.active {
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+
+  .layout.show-map .list-pane,
+  .layout.show-list .map-pane {
+    display: none;
+  }
+
+  .list-pane {
+    border-left: none;
+  }
+}

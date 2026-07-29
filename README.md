@@ -56,6 +56,18 @@ Claude Code will need you to:
 
 Everything else (code, schema application, Leaflet setup) it can do directly.
 
+## Running it locally
+
+```bash
+npm install
+cp .env.example .env   # then fill in your Supabase URL + anon key
+npm run dev            # http://localhost:5173/eat-mit/
+```
+
+The v1 SQL lives in `supabase/migrations/0001_v1_places.sql` — paste it into the
+Supabase SQL Editor once. Pushing to `main` builds and deploys to GitHub Pages
+via `.github/workflows/deploy.yml`.
+
 ## Non-goals for v1 (see ROADMAP.md for when these come in)
 
 - No friends, sharing, or groups yet — the data model supports it, but no UI for
