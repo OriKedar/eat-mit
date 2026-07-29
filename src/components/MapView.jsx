@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
+import { densestArea } from '../lib/geo'
 
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
 // and the colour can encode status directly.
@@ -41,25 +42,40 @@ function clusterIcon(cluster) {
 }
 
 const FALLBACK_CENTER = [52.52, 13.405] // Berlin, so an empty map opens somewhere useful
+const CITY_ZOOM = 12 // whole city in frame, not a street
 
-function FitBounds({ entries, focus }) {
+// Opens on the city the user has pinned most, falling back to wherever they
+// are. Runs once: after that the map is theirs to pan, and adding a place
+// shouldn't yank the view somewhere else.
+function InitialView({ entries, me }) {
+  const map = useMap()
+  const done = useRef(false)
+
+  useEffect(() => {
+    if (done.current) return
+
+    if (entries.length) {
+      const hub = densestArea(entries.map((e) => e.place))
+      map.setView([hub.lat, hub.lng], CITY_ZOOM, { animate: false })
+      done.current = true
+      return
+    }
+    if (me) {
+      map.setView([me.lat, me.lng], CITY_ZOOM, { animate: false })
+      done.current = true
+    }
+  }, [entries, me, map])
+
+  return null
+}
+
+function FocusOnSelection({ focus }) {
   const map = useMap()
 
   useEffect(() => {
-    if (focus) {
-      map.flyTo([focus.place.lat, focus.place.lng], Math.max(map.getZoom(), 15), {
-        duration: 0.6,
-      })
-      return
-    }
-    if (!entries.length) return
-    map.fitBounds(
-      L.latLngBounds(entries.map((e) => [e.place.lat, e.place.lng])).pad(0.2),
-      { animate: false },
-    )
-    // Only refit when the set of pins changes, not on every focus clear.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries.length, focus?.id])
+    if (!focus) return
+    map.flyTo([focus.place.lat, focus.place.lng], Math.max(map.getZoom(), 15), { duration: 0.6 })
+  }, [focus, map])
 
   return null
 }
@@ -113,22 +129,15 @@ function DropPinHandler({ onDropPin }) {
 }
 
 export default function MapView({ entries, focus, onSelect, me, locateState, onLocate, onDropPin }) {
-  const center = useMemo(() => {
-    if (entries.length) return [entries[0].place.lat, entries[0].place.lng]
-    if (me) return [me.lat, me.lng]
-    return FALLBACK_CENTER
-    // Only for the initial render; MapContainer ignores later center changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
-    <MapContainer center={center} zoom={13} className="map" scrollWheelZoom>
+    <MapContainer center={FALLBACK_CENTER} zoom={CITY_ZOOM} className="map" scrollWheelZoom>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         maxZoom={19}
       />
-      <FitBounds entries={entries} focus={focus} />
+      <InitialView entries={entries} me={me} />
+      <FocusOnSelection focus={focus} />
       <DropPinHandler onDropPin={onDropPin} />
 
       <MarkerClusterGroup

@@ -10,6 +10,30 @@ export function distanceKm(a, b) {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h))
 }
 
+// Where to open the map: the middle of wherever the user has the most pins,
+// rather than their newest one. Counting neighbours within a radius (instead
+// of bucketing into a grid) avoids a city getting split across cell borders.
+// O(n²), which is fine for a personal list of a few hundred places.
+export function densestArea(points, radiusKm = 15) {
+  if (!points.length) return null
+
+  let best = null
+  let bestCount = -1
+
+  for (const candidate of points) {
+    const near = points.filter((p) => distanceKm(candidate, p) <= radiusKm)
+    if (near.length > bestCount) {
+      bestCount = near.length
+      best = near
+    }
+  }
+
+  return {
+    lat: best.reduce((sum, p) => sum + p.lat, 0) / best.length,
+    lng: best.reduce((sum, p) => sum + p.lng, 0) / best.length,
+  }
+}
+
 export function formatDistance(km) {
   if (km < 1) return `${Math.round(km * 1000)} m`
   if (km < 10) return `${km.toFixed(1)} km`
