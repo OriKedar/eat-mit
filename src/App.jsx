@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import { usePlaces } from './hooks/usePlaces'
+import { useOnline } from './hooks/useOnline'
 import Auth from './components/Auth'
 import MapView from './components/MapView'
 import PlaceList from './components/PlaceList'
 import PlaceDialog from './components/PlaceDialog'
+import UpdatePrompt from './components/UpdatePrompt'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -24,9 +26,18 @@ export default function App() {
   }, [])
 
   if (!supabaseConfigured) return <MissingConfig />
-  if (!authReady) return <div className="boot">Loading…</div>
-  if (!session) return <Auth />
-  return <Home session={session} />
+  return (
+    <>
+      <UpdatePrompt />
+      {!authReady ? (
+        <div className="boot">Loading…</div>
+      ) : session ? (
+        <Home session={session} />
+      ) : (
+        <Auth />
+      )}
+    </>
+  )
 }
 
 function MissingConfig() {
@@ -44,7 +55,8 @@ function MissingConfig() {
 
 function Home({ session }) {
   const userId = session.user.id
-  const { entries, loading, error, addEntry, updateEntry, deleteEntry } = usePlaces(userId)
+  const { entries, loading, error, refresh, addEntry, updateEntry, deleteEntry } = usePlaces(userId)
+  const online = useOnline()
 
   const [dialog, setDialog] = useState(null) // null | {mode:'add'} | {mode:'edit', entry}
   const [selected, setSelected] = useState(null)
@@ -68,7 +80,20 @@ function Home({ session }) {
         </div>
       </header>
 
-      {error && <p className="error banner">{error}</p>}
+      {!online && (
+        <p className="banner banner-offline">
+          Offline — the map still works, but saving and searching need a connection.
+        </p>
+      )}
+
+      {error && (
+        <p className="error banner">
+          {error}
+          <button className="banner-retry" onClick={refresh}>
+            Retry
+          </button>
+        </p>
+      )}
 
       <nav className="mobile-tabs">
         {['map', 'list'].map((tab) => (
@@ -87,8 +112,12 @@ function Home({ session }) {
           <MapView entries={entries} focus={selected} onSelect={setSelected} />
         </section>
         <aside className="list-pane">
-          {loading ? (
-            <p className="hint pad">Loading your places…</p>
+          {loading && !entries.length ? (
+            <ul className="skeleton-list">
+              {[0, 1, 2, 3].map((i) => (
+                <li key={i} className="skeleton" />
+              ))}
+            </ul>
           ) : entries.length ? (
             <PlaceList
               entries={entries}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet'
 import L from 'leaflet'
 
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
@@ -46,6 +46,61 @@ function FitBounds({ entries, focus }) {
   return null
 }
 
+const meIcon = L.divIcon({
+  className: 'me-wrapper',
+  html: '<span class="me-dot"></span>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+})
+
+function LocateControl() {
+  const map = useMap()
+  const [me, setMe] = useState(null)
+  const [state, setState] = useState('idle') // idle | locating | error
+
+  function locate() {
+    if (!navigator.geolocation) {
+      setState('error')
+      return
+    }
+    setState('locating')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords
+        setMe({ lat: latitude, lng: longitude, accuracy })
+        setState('idle')
+        map.flyTo([latitude, longitude], Math.max(map.getZoom(), 15), { duration: 0.6 })
+      },
+      () => setState('error'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    )
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`locate-button ${state}`}
+        onClick={locate}
+        title={state === 'error' ? "Couldn't get your location" : 'Center on my location'}
+        aria-label="Center on my location"
+      >
+        {state === 'locating' ? '…' : '◎'}
+      </button>
+      {me && (
+        <>
+          <Circle
+            center={[me.lat, me.lng]}
+            radius={me.accuracy}
+            pathOptions={{ color: '#4a9eff', weight: 1, fillOpacity: 0.12 }}
+          />
+          <Marker position={[me.lat, me.lng]} icon={meIcon} />
+        </>
+      )}
+    </>
+  )
+}
+
 export default function MapView({ entries, focus, onSelect }) {
   const center = useMemo(() => {
     if (entries.length) return [entries[0].place.lat, entries[0].place.lng]
@@ -60,6 +115,7 @@ export default function MapView({ entries, focus, onSelect }) {
         maxZoom={19}
       />
       <FitBounds entries={entries} focus={focus} />
+      <LocateControl />
       {entries.map((entry) => (
         <Marker
           key={entry.id}
