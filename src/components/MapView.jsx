@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
-import { densestArea } from '../lib/geo'
+import { densestArea, distanceKm } from '../lib/geo'
+import { useNearbyPlaces } from '../hooks/useNearbyPlaces'
 
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
 // and the colour can encode status directly.
@@ -16,21 +17,76 @@ function pinTone(entry) {
   return entry.rating ? 'visited' : 'unrated'
 }
 
+// OSM has far more amenity values than we want distinct icons for, so they
+// fold down to the three the pins actually distinguish. Anything else (or no
+// kind at all — hand-placed pins, older saved rows) gets no glyph.
+const KIND_ICON_GROUP = {
+  restaurant: 'restaurant',
+  fast_food: 'restaurant',
+  bar: 'bar',
+  pub: 'bar',
+  cafe: 'cafe',
+  ice_cream: 'cafe',
+}
+
+const KIND_GLYPHS = {
+  restaurant:
+    '<path d="M6 2v7a2 2 0 0 0 4 0V2M8 9v13M16 2c-2 0-3 2-3 5s1 5 3 5v9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  bar: '<path d="M4 4h16M4 4l8 9 8-9M12 13v7M8 20h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  cafe: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M17 9h1a3 3 0 0 1 0 6h-1" fill="none" stroke="currentColor" stroke-width="2"/>',
+}
+
+function glyphMarkup(kind, size) {
+  const group = KIND_ICON_GROUP[kind]
+  if (!group) return ''
+  return `<svg class="pin-glyph" viewBox="0 0 24 24" width="${size}" height="${size}">${KIND_GLYPHS[group]}</svg>`
+}
+
 const iconCache = new Map()
-function pinIcon(tone) {
-  if (!iconCache.has(tone)) {
+function pinIcon(tone, kind) {
+  const cacheKey = `${tone}:${kind || ''}`
+  if (!iconCache.has(cacheKey)) {
     iconCache.set(
-      tone,
+      cacheKey,
       L.divIcon({
         className: 'pin-wrapper',
-        html: `<span class="pin" style="--pin-color:${PIN_COLORS[tone]}"></span>`,
+        html: `<span class="pin" style="--pin-color:${PIN_COLORS[tone]}">${glyphMarkup(kind, 11)}</span>`,
         iconSize: [22, 22],
         iconAnchor: [11, 22],
         popupAnchor: [0, -20],
       }),
     )
   }
-  return iconCache.get(tone)
+  return iconCache.get(cacheKey)
+}
+
+// At/above this zoom: every real place in the current viewport, uncapped,
+// grouped by MarkerClusterGroup same as saved pins — 17+ already looks
+// right, leave this tier alone. Below it, two capped tiers instead of one
+// so the density step-down feels gradual rather than a single 25→everything
+// jump: ≤14 shows more (a wide view with too few pins looks sparse/broken),
+// 15-16 shows fewer (getting close to full detail, so a smaller top-up is
+// enough). Tune both with the zoom-debug badge.
+const PINS_FULL_ZOOM = 17
+const LOW_ZOOM_PIN_CAP = 40
+const MID_ZOOM_PIN_CAP = 70
+
+const nearbyIconCache = new Map()
+function nearbyIcon(kind) {
+  const cacheKey = kind || ''
+  if (!nearbyIconCache.has(cacheKey)) {
+    nearbyIconCache.set(
+      cacheKey,
+      L.divIcon({
+        className: 'pin-wrapper',
+        html: `<span class="pin pin-nearby">${glyphMarkup(kind, 9)}</span>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 18],
+        popupAnchor: [0, -16],
+      }),
+    )
+  }
+  return nearbyIconCache.get(cacheKey)
 }
 
 const meIcon = L.divIcon({
@@ -169,6 +225,50 @@ function LocateControl({ state, onLocate }) {
   )
 }
 
+// Tracks zoom + center + viewport bounds — everything NearbyLayer needs to
+// pick between its two selection strategies (see PINS_FULL_ZOOM).
+function useMapView() {
+  const [zoom, setZoom] = useState(null)
+  const [center, setCenter] = useState(null)
+  const [bounds, setBounds] = useState(null)
+
+  const map = useMapEvents({
+    moveend: update,
+    zoomend: update,
+  })
+
+  function update() {
+    setZoom(map.getZoom())
+    const c = map.getCenter()
+    setCenter({ lat: c.lat, lng: c.lng })
+    const b = map.getBounds()
+    setBounds({
+      south: b.getSouth(),
+      west: b.getWest(),
+      north: b.getNorth(),
+      east: b.getEast(),
+    })
+  }
+
+  useEffect(update, [])
+
+  return { zoom, center, bounds }
+}
+
+// Dev-only readout of zoom + how many pins that zoom is actually putting into
+// the cluster group — the two numbers you need to tune maxClusterRadius /
+// disableClusteringAtZoom above without guessing. Stripped from prod builds
+// since import.meta.env.DEV is statically false there (see App.jsx's DEV_MOCK
+// for the same pattern).
+function ZoomDebug({ zoom, count }) {
+  if (!import.meta.env.DEV) return null
+  return (
+    <div className="zoom-debug">
+      zoom {zoom} · {count} pins
+    </div>
+  )
+}
+
 // Leaflet fires 'contextmenu' for both right-click and a touch long-press,
 // which is exactly the "drop a pin here" gesture we want.
 function DropPinHandler({ onDropPin }) {
@@ -180,7 +280,85 @@ function DropPinHandler({ onDropPin }) {
   return null
 }
 
-export default function MapView({ entries, focus, onSelect, me, locateState, onLocate, onDropPin }) {
+// Always-on layer of nearby restaurants, so the map shows what's around even
+// before the user has saved anything. Ghost pins, distinct from the coloured
+// saved-entry pins; clicking one starts the add flow pre-filled with that
+// place instead of a fresh search.
+//
+// Three zoom tiers (see PINS_FULL_ZOOM / LOW_ZOOM_PIN_CAP / MID_ZOOM_PIN_CAP):
+// ≤14 and 15-16 both cap to the closest N places to the map center — just a
+// different N — so neither a wide view nor a medium one turns into noise.
+// At PINS_FULL_ZOOM and above, everything in the viewport, uncapped;
+// clustering below groups it the same way it always has.
+//
+// ≤14 renders ungrouped — real individual pins, not cluster bubbles. 15+ is
+// unchanged: still wrapped in MarkerClusterGroup exactly as before.
+function NearbyLayer({ savedOsmIds, onSelectNearby }) {
+  const { zoom, center, bounds } = useMapView()
+  const all = useNearbyPlaces()
+
+  let unsaved = []
+  if (center) {
+    const candidates = all.filter((p) => !savedOsmIds.has(p.osm_id))
+    if (zoom >= PINS_FULL_ZOOM && bounds) {
+      const { south, west, north, east } = bounds
+      unsaved = candidates.filter(
+        (p) => p.lat >= south && p.lat <= north && p.lng >= west && p.lng <= east,
+      )
+    } else {
+      const cap = zoom >= 15 ? MID_ZOOM_PIN_CAP : LOW_ZOOM_PIN_CAP
+      unsaved = candidates
+        .map((p) => ({ ...p, _km: distanceKm(center, p) }))
+        .sort((a, b) => a._km - b._km)
+        .slice(0, cap)
+    }
+  }
+
+  const markers = unsaved.map((place) => (
+    <Marker
+      key={place.osm_id}
+      position={[place.lat, place.lng]}
+      icon={nearbyIcon(place.kind)}
+      eventHandlers={{ click: () => onSelectNearby(place) }}
+    >
+      <Popup>
+        <strong>{place.name}</strong>
+        {place.cuisine && <div className="popup-meta">{place.cuisine}</div>}
+        {place.address && <div className="popup-address">{place.address}</div>}
+      </Popup>
+    </Marker>
+  ))
+
+  return (
+    <>
+      <ZoomDebug zoom={zoom} count={unsaved.length} />
+      {zoom >= 15 ? (
+        <MarkerClusterGroup
+          iconCreateFunction={clusterIcon}
+          showCoverageOnHover={false}
+          maxClusterRadius={40}
+          disableClusteringAtZoom={17}
+          spiderfyOnMaxZoom
+        >
+          {markers}
+        </MarkerClusterGroup>
+      ) : (
+        markers
+      )}
+    </>
+  )
+}
+
+export default function MapView({
+  entries,
+  focus,
+  onSelect,
+  onSelectNearby,
+  me,
+  locateState,
+  onLocate,
+  onDropPin,
+}) {
   const [basemap, setBasemap] = useState(
     () => localStorage.getItem(BASEMAP_KEY) || 'dark',
   )
@@ -190,6 +368,8 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
     setBasemap(next)
     localStorage.setItem(BASEMAP_KEY, next)
   }
+
+  const savedOsmIds = new Set(entries.map((e) => e.place.osm_id).filter(Boolean))
 
   return (
     <MapContainer
@@ -209,6 +389,7 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
       <InitialView entries={entries} me={me} />
       <FocusOnSelection focus={focus} />
       <DropPinHandler onDropPin={onDropPin} />
+      <NearbyLayer savedOsmIds={savedOsmIds} onSelectNearby={onSelectNearby} />
 
       <MarkerClusterGroup
         iconCreateFunction={clusterIcon}
@@ -221,7 +402,7 @@ export default function MapView({ entries, focus, onSelect, me, locateState, onL
           <Marker
             key={entry.id}
             position={[entry.place.lat, entry.place.lng]}
-            icon={pinIcon(pinTone(entry))}
+            icon={pinIcon(pinTone(entry), entry.place.kind)}
             eventHandlers={{ click: () => onSelect(entry) }}
           >
             <Popup>

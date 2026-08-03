@@ -80,6 +80,7 @@ function toPlace(r) {
     address: address || r.display_name,
     osm_id: r.osm_type && r.osm_id ? `${r.osm_type}/${r.osm_id}` : null,
     cuisine: r.extratags?.cuisine || null,
+    kind: r.class === 'amenity' ? r.type : null,
     displayName: r.display_name,
   }
 }

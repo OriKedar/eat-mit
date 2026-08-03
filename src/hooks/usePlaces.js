@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 // .eq('user_id') is belt-and-braces and lets Postgres use the index.
 const SELECT = `
   id, status, rating, notes, photo_url, created_at, updated_at, place_id,
-  place:places ( id, name, lat, lng, address, osm_id, cuisine )
+  place:places ( id, name, lat, lng, address, osm_id, cuisine, kind )
 `
 
 export function usePlaces(userId) {
@@ -57,6 +57,7 @@ export function usePlaces(userId) {
         address: place.address,
         osm_id: place.osm_id,
         cuisine: place.cuisine,
+        kind: place.kind,
       })
       .select('id')
       .single()
