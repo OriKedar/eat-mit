@@ -20,6 +20,7 @@ create table places (
   address text,
   osm_id text,               -- Nominatim/OSM place reference, if available
   cuisine text,              -- free text, e.g. "Italian", "Sushi"
+  kind text,                 -- OSM amenity value, e.g. "restaurant", "cafe", "bar" — drives the map pin icon
   created_at timestamptz default now()
 );
 ```

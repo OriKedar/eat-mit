@@ -3,19 +3,21 @@ import { searchPlaces, reverseGeocode } from '../lib/nominatim'
 
 const EMPTY_DETAILS = { status: 'want_to_go', rating: 0, notes: '', photo_url: '' }
 
-// One dialog, three modes:
-//   'add'  — search Nominatim, pick a result, then fill in details
-//   'pin'  — coordinates came from a long-press; name it by hand
-//   'edit' — place is fixed, only the personal details are editable
-export default function PlaceDialog({ mode, entry, coords, onClose, onSubmit }) {
+// One dialog, four modes:
+//   'add'    — search Nominatim, pick a result, then fill in details
+//   'pin'    — coordinates came from a long-press; name it by hand
+//   'nearby' — place came from a nearby-restaurant pin; already fully known
+//   'edit'   — place is fixed, only the personal details are editable
+export default function PlaceDialog({ mode, entry, coords, place, onClose, onSubmit }) {
   const editing = mode === 'edit'
   const dropped = mode === 'pin'
+  const nearby = mode === 'nearby'
 
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
-  const [picked, setPicked] = useState(editing ? entry.place : null)
+  const [picked, setPicked] = useState(editing ? entry.place : nearby ? place : null)
   const [resolving, setResolving] = useState(dropped)
 
   const [details, setDetails] = useState(

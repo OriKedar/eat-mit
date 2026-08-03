@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import { usePlaces } from './hooks/usePlaces'
+import { useMockPlaces } from './hooks/useMockPlaces'
 import { useOnline } from './hooks/useOnline'
 import { useGeolocation } from './hooks/useGeolocation'
 import Auth from './components/Auth'
@@ -8,6 +9,13 @@ import MapView from './components/MapView'
 import PlaceList from './components/PlaceList'
 import PlaceDialog from './components/PlaceDialog'
 import UpdatePrompt from './components/UpdatePrompt'
+
+// TEMP: lets the UI be tested locally with no Supabase project configured —
+// skips Auth and feeds the map from useMockPlaces instead. Only ever active
+// in `vite dev` with no .env (import.meta.env.DEV is false in prod builds,
+// so this is dead code in anything shipped). Delete once real creds are
+// available for local testing.
+const DEV_MOCK = import.meta.env.DEV && !supabaseConfigured
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -26,7 +34,8 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  if (!supabaseConfigured) return <MissingConfig />
+  if (!supabaseConfigured && !DEV_MOCK) return <MissingConfig />
+  if (DEV_MOCK) return <Home session={{ user: { id: 'dev-mock-user' } }} />
   return (
     <>
       <UpdatePrompt />
@@ -56,11 +65,17 @@ function MissingConfig() {
 
 function Home({ session }) {
   const userId = session.user.id
-  const { entries, loading, error, refresh, addEntry, updateEntry, deleteEntry } = usePlaces(userId)
+  // Reads the module-level constant directly (not a prop) so the minifier
+  // can fold this to `usePlaces` and drop useMockPlaces from prod bundles
+  // entirely — DEV_MOCK is always false there, but a prop crossing a
+  // function boundary can't be constant-folded the same way a same-scope
+  // const can.
+  const placesHook = DEV_MOCK ? useMockPlaces : usePlaces
+  const { entries, loading, error, refresh, addEntry, updateEntry, deleteEntry } = placesHook(userId)
   const online = useOnline()
   const { position: me, state: locateState, locate } = useGeolocation()
 
-  // null | {mode:'add'} | {mode:'edit', entry} | {mode:'pin', coords}
+  // null | {mode:'add'} | {mode:'edit', entry} | {mode:'pin', coords} | {mode:'nearby', place}
   const [dialog, setDialog] = useState(null)
   const [selected, setSelected] = useState(null)
   const [mobileTab, setMobileTab] = useState('map')
@@ -79,7 +94,7 @@ function Home({ session }) {
           <button className="primary" onClick={() => setDialog({ mode: 'add' })}>
             + Add place
           </button>
-          <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+          {!DEV_MOCK && <button onClick={() => supabase.auth.signOut()}>Sign out</button>}
         </div>
       </header>
 
@@ -116,6 +131,7 @@ function Home({ session }) {
             entries={entries}
             focus={selected}
             onSelect={setSelected}
+            onSelectNearby={(place) => setDialog({ mode: 'nearby', place })}
             me={me}
             locateState={locateState}
             onLocate={locate}
@@ -155,6 +171,7 @@ function Home({ session }) {
           mode={dialog.mode}
           entry={dialog.entry}
           coords={dialog.coords}
+          place={dialog.place}
           onClose={() => setDialog(null)}
           onSubmit={(place, details) =>
             dialog.mode === 'edit'
