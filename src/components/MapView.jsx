@@ -8,13 +8,11 @@ import { useNearbyPlaces } from '../hooks/useNearbyPlaces'
 // divIcon instead of the default PNG marker: no bundler asset-path juggling,
 // and the colour can encode status directly.
 //   gold  — still want to go
-//   green — visited and rated
-//   coral — visited but not rated yet, i.e. owes a verdict
-const PIN_COLORS = { want_to_go: '#E8A33D', visited: '#8FAE7C', unrated: '#C4432E' }
+//   green — visited
+const PIN_COLORS = { want_to_go: '#E8A33D', visited: '#8FAE7C' }
 
 function pinTone(entry) {
-  if (entry.status !== 'visited') return 'want_to_go'
-  return entry.rating ? 'visited' : 'unrated'
+  return entry.status === 'visited' ? 'visited' : 'want_to_go'
 }
 
 // OSM has far more amenity values than we want distinct icons for, so they
