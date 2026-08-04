@@ -12,8 +12,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+      # The default npm on this runner mis-resolves the lockfile's optional
+      # esbuild platform packages (EBADPLATFORM on npm ci) — match the npm
+      # version the lockfile was generated with.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm test
 
@@ -23,8 +27,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+      # The default npm on this runner mis-resolves the lockfile's optional
+      # esbuild platform packages (EBADPLATFORM on npm ci) — match the npm
+      # version the lockfile was generated with.
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npm run build
         env:
