@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
-import MarkerClusterGroup from 'react-leaflet-cluster'
-import L from 'leaflet'
-import { densestArea, distanceKm } from '../lib/geo'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import maplibregl from 'maplibre-gl'
+import {
+  Map,
+  useMap,
+  MapMarker,
+  MarkerContent,
+  MarkerPopup,
+  MapControls,
+  MapClusterLayer,
+  MapGeoJSON,
+} from '@/components/ui/map'
+import { densestArea, circlePolygon } from '../lib/geo'
 import { useNearbyPlaces } from '../hooks/useNearbyPlaces'
 
-// divIcon instead of the default PNG marker: no bundler asset-path juggling,
-// and the colour can encode status directly.
+// divIcon-style marker content: no bundler asset-path juggling, and the
+// colour can encode status directly.
 //   gold  — still want to go
 //   green — visited
 const PIN_COLORS = { want_to_go: '#E8A33D', visited: '#8FAE7C' }
@@ -34,89 +42,19 @@ const KIND_GLYPHS = {
   cafe: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M17 9h1a3 3 0 0 1 0 6h-1" fill="none" stroke="currentColor" stroke-width="2"/>',
 }
 
-function glyphMarkup(kind, size) {
+function Glyph({ kind, size }) {
   const group = KIND_ICON_GROUP[kind]
-  if (!group) return ''
-  return `<svg class="pin-glyph" viewBox="0 0 24 24" width="${size}" height="${size}">${KIND_GLYPHS[group]}</svg>`
+  if (!group) return null
+  return (
+    <svg
+      className="pin-glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      dangerouslySetInnerHTML={{ __html: KIND_GLYPHS[group] }}
+    />
+  )
 }
-
-const iconCache = new Map()
-function pinIcon(tone, kind) {
-  const cacheKey = `${tone}:${kind || ''}`
-  if (!iconCache.has(cacheKey)) {
-    iconCache.set(
-      cacheKey,
-      L.divIcon({
-        className: 'pin-wrapper',
-        html: `<span class="pin" style="--pin-color:${PIN_COLORS[tone]}">${glyphMarkup(kind, 11)}</span>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 22],
-        popupAnchor: [0, -20],
-      }),
-    )
-  }
-  return iconCache.get(cacheKey)
-}
-
-// At/above this zoom: every real place in the current viewport, uncapped,
-// grouped by MarkerClusterGroup same as saved pins — 17+ already looks
-// right, leave this tier alone. Below it, two capped tiers instead of one
-// so the density step-down feels gradual rather than a single 25→everything
-// jump: ≤14 shows more (a wide view with too few pins looks sparse/broken),
-// 15-16 shows fewer (getting close to full detail, so a smaller top-up is
-// enough). Tune both with the zoom-debug badge.
-const PINS_FULL_ZOOM = 17
-const LOW_ZOOM_PIN_CAP = 40
-const MID_ZOOM_PIN_CAP = 70
-
-const nearbyIconCache = new Map()
-function nearbyIcon(kind) {
-  const cacheKey = kind || ''
-  if (!nearbyIconCache.has(cacheKey)) {
-    nearbyIconCache.set(
-      cacheKey,
-      L.divIcon({
-        className: 'pin-wrapper',
-        html: `<span class="pin pin-nearby">${glyphMarkup(kind, 9)}</span>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 18],
-        popupAnchor: [0, -16],
-      }),
-    )
-  }
-  return nearbyIconCache.get(cacheKey)
-}
-
-const meIcon = L.divIcon({
-  className: 'me-wrapper',
-  html: '<span class="me-dot"></span>',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-})
-
-function clusterIcon(cluster) {
-  const count = cluster.getChildCount()
-  const size = count < 10 ? 34 : count < 50 ? 40 : 46
-  return L.divIcon({
-    html: `<span class="cluster-bubble">${count}</span>`,
-    className: 'cluster-wrapper',
-    iconSize: L.point(size, size, true),
-  })
-}
-
-// Both styles come from the same CARTO host, so the service worker's tile
-// cache rule covers either without change.
-const BASEMAPS = {
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    label: 'Switch to the light map',
-  },
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    label: 'Switch to the dark map',
-  },
-}
-const BASEMAP_KEY = 'eat-mit:basemap'
 
 function SunIcon() {
   return (
@@ -139,51 +77,9 @@ function SunIcon() {
 function MoonIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-      <path
-        d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z"
-        fill="currentColor"
-      />
+      <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" fill="currentColor" />
     </svg>
   )
-}
-
-const FALLBACK_CENTER = [52.52, 13.405] // Berlin, so an empty map opens somewhere useful
-const CITY_ZOOM = 12 // whole city in frame, not a street
-
-// Opens on the city the user has pinned most, falling back to wherever they
-// are. Runs once: after that the map is theirs to pan, and adding a place
-// shouldn't yank the view somewhere else.
-function InitialView({ entries, me }) {
-  const map = useMap()
-  const done = useRef(false)
-
-  useEffect(() => {
-    if (done.current) return
-
-    if (entries.length) {
-      const hub = densestArea(entries.map((e) => e.place))
-      map.setView([hub.lat, hub.lng], CITY_ZOOM, { animate: false })
-      done.current = true
-      return
-    }
-    if (me) {
-      map.setView([me.lat, me.lng], CITY_ZOOM, { animate: false })
-      done.current = true
-    }
-  }, [entries, me, map])
-
-  return null
-}
-
-function FocusOnSelection({ focus }) {
-  const map = useMap()
-
-  useEffect(() => {
-    if (!focus) return
-    map.flyTo([focus.place.lat, focus.place.lng], Math.max(map.getZoom(), 15), { duration: 0.6 })
-  }, [focus, map])
-
-  return null
 }
 
 // Standard "my location" crosshair: ring, centre dot, four ticks.
@@ -202,18 +98,102 @@ function LocateIcon() {
   )
 }
 
+const FALLBACK_CENTER = [13.405, 52.52] // Berlin, so an empty map opens somewhere useful ([lng, lat])
+const CITY_ZOOM = 12 // whole city in frame, not a street
+
+// Opens on the city the user has pinned most, falling back to wherever they
+// are. Runs once: after that the map is theirs to pan, and adding a place
+// shouldn't yank the view somewhere else.
+function InitialView({ entries, me }) {
+  const { map } = useMap()
+  const done = useRef(false)
+
+  useEffect(() => {
+    if (done.current || !map) return
+
+    if (entries.length) {
+      const hub = densestArea(entries.map((e) => e.place))
+      map.jumpTo({ center: [hub.lng, hub.lat], zoom: CITY_ZOOM })
+      done.current = true
+      return
+    }
+    if (me) {
+      map.jumpTo({ center: [me.lng, me.lat], zoom: CITY_ZOOM })
+      done.current = true
+    }
+  }, [entries, me, map])
+
+  return null
+}
+
+function FocusOnSelection({ focus }) {
+  const { map } = useMap()
+
+  useEffect(() => {
+    if (!focus || !map) return
+    map.flyTo({
+      center: [focus.place.lng, focus.place.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 600,
+    })
+  }, [focus, map])
+
+  return null
+}
+
+// Leaflet fires 'contextmenu' for both right-click and a touch long-press,
+// and MapLibre does the same — exactly the "drop a pin here" gesture we want.
+function DropPinHandler({ onDropPin }) {
+  const { map } = useMap()
+
+  useEffect(() => {
+    if (!map) return
+    function handler(e) {
+      onDropPin({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+    }
+    map.on('contextmenu', handler)
+    return () => map.off('contextmenu', handler)
+  }, [map, onDropPin])
+
+  return null
+}
+
+// Tracks zoom + center — nothing here needs viewport bounds anymore since
+// the nearby layer clusters the whole citywide dataset instead of manually
+// capping by distance per zoom tier (see NearbyLayer).
+function ViewportTracker({ onChange }) {
+  const { map, isLoaded } = useMap()
+
+  useEffect(() => {
+    if (!map || !isLoaded) return
+    function update() {
+      const c = map.getCenter()
+      onChange({ zoom: map.getZoom(), center: { lat: c.lat, lng: c.lng } })
+    }
+    update()
+    map.on('moveend', update)
+    map.on('zoomend', update)
+    return () => {
+      map.off('moveend', update)
+      map.off('zoomend', update)
+    }
+  }, [map, isLoaded, onChange])
+
+  return null
+}
+
 function LocateControl({ state, onLocate }) {
-  const map = useMap()
+  const { map } = useMap()
 
   async function handleClick() {
     const pos = await onLocate()
-    if (pos) map.flyTo([pos.lat, pos.lng], Math.max(map.getZoom(), 15), { duration: 0.6 })
+    if (pos && map) map.flyTo({ center: [pos.lng, pos.lat], zoom: Math.max(map.getZoom(), 15), duration: 600 })
   }
 
   return (
     <button
       type="button"
-      className={`locate-button ${state}`}
+      className={`map-fab locate-button ${state}`}
       onClick={handleClick}
       title={state === 'error' ? "Couldn't get your location" : 'Center on my location'}
       aria-label="Center on my location"
@@ -223,127 +203,112 @@ function LocateControl({ state, onLocate }) {
   )
 }
 
-// Tracks zoom + center + viewport bounds — everything NearbyLayer needs to
-// pick between its two selection strategies (see PINS_FULL_ZOOM).
-function useMapView() {
-  const [zoom, setZoom] = useState(null)
-  const [center, setCenter] = useState(null)
-  const [bounds, setBounds] = useState(null)
-
-  const map = useMapEvents({
-    moveend: update,
-    zoomend: update,
-  })
-
-  function update() {
-    setZoom(map.getZoom())
-    const c = map.getCenter()
-    setCenter({ lat: c.lat, lng: c.lng })
-    const b = map.getBounds()
-    setBounds({
-      south: b.getSouth(),
-      west: b.getWest(),
-      north: b.getNorth(),
-      east: b.getEast(),
-    })
-  }
-
-  useEffect(update, [])
-
-  return { zoom, center, bounds }
-}
-
-// Dev-only readout of zoom + how many pins that zoom is actually putting into
-// the cluster group — the two numbers you need to tune maxClusterRadius /
-// disableClusteringAtZoom above without guessing. Stripped from prod builds
-// since import.meta.env.DEV is statically false there (see App.jsx's DEV_MOCK
-// for the same pattern).
+// Dev-only readout of zoom + how many "nearby" places are loaded — stripped
+// from prod builds since import.meta.env.DEV is statically false there.
 function ZoomDebug({ zoom, count }) {
   if (!import.meta.env.DEV) return null
   return (
     <div className="zoom-debug">
-      zoom {zoom} · {count} pins
+      zoom {zoom} · {count} nearby
     </div>
   )
 }
 
-// Leaflet fires 'contextmenu' for both right-click and a touch long-press,
-// which is exactly the "drop a pin here" gesture we want.
-function DropPinHandler({ onDropPin }) {
-  useMapEvents({
-    contextmenu(e) {
-      onDropPin({ lat: e.latlng.lat, lng: e.latlng.lng })
-    },
-  })
-  return null
-}
-
 // Always-on layer of nearby restaurants, so the map shows what's around even
 // before the user has saved anything. Ghost pins, distinct from the coloured
-// saved-entry pins; clicking one starts the add flow pre-filled with that
-// place instead of a fresh search.
+// saved-entry pins; clicking one shows a small popup with an explicit "Add"
+// action rather than jumping straight into the add flow.
 //
-// Three zoom tiers (see PINS_FULL_ZOOM / LOW_ZOOM_PIN_CAP / MID_ZOOM_PIN_CAP):
-// ≤14 and 15-16 both cap to the closest N places to the map center — just a
-// different N — so neither a wide view nor a medium one turns into noise.
-// At PINS_FULL_ZOOM and above, everything in the viewport, uncapped;
-// clustering below groups it the same way it always has.
-//
-// ≤14 renders ungrouped — real individual pins, not cluster bubbles. 15+ is
-// unchanged: still wrapped in MarkerClusterGroup exactly as before.
+// Unlike the saved-entry pins, these render through MapClusterLayer — real
+// per-place teardrop/glyph markers don't scale to a citywide dataset (~9.5k
+// points for Berlin), and MapLibre's built-in clustering (via supercluster)
+// handles that natively, so there's no need for the zoom-tiered distance
+// capping the old Leaflet version did by hand. The trade-off: nearby pins
+// render as plain dots instead of the teardrop+glyph saved pins get.
+const MUTED_FOREGROUND = { dark: '#9c8e7c', light: '#7c6d58' }
+// Muted brown/gold ramp so nearby-cluster bubbles read as ambient context,
+// not competing with the gold/green saved-entry pins.
+const NEARBY_CLUSTER_COLORS = { dark: ['#6b5d49', '#8a7355', '#a8895f'], light: ['#a8895f', '#8a7355', '#6b5d49'] }
+
 function NearbyLayer({ savedOsmIds, onSelectNearby }) {
-  const { zoom, center, bounds } = useMapView()
+  const { map, resolvedTheme } = useMap()
   const all = useNearbyPlaces()
+  const popupRef = useRef(null)
 
-  let unsaved = []
-  if (center) {
-    const candidates = all.filter((p) => !savedOsmIds.has(p.osm_id))
-    if (zoom >= PINS_FULL_ZOOM && bounds) {
-      const { south, west, north, east } = bounds
-      unsaved = candidates.filter(
-        (p) => p.lat >= south && p.lat <= north && p.lng >= west && p.lng <= east,
-      )
-    } else {
-      const cap = zoom >= 15 ? MID_ZOOM_PIN_CAP : LOW_ZOOM_PIN_CAP
-      unsaved = candidates
-        .map((p) => ({ ...p, _km: distanceKm(center, p) }))
-        .sort((a, b) => a._km - b._km)
-        .slice(0, cap)
+  useEffect(() => () => popupRef.current?.remove(), [])
+
+  const geojson = useMemo(() => {
+    const unsaved = all.filter((p) => !savedOsmIds.has(p.osm_id))
+    return {
+      type: 'FeatureCollection',
+      features: unsaved.map((p) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: { name: p.name, kind: p.kind || '', cuisine: p.cuisine || '', osm_id: p.osm_id },
+      })),
     }
-  }
+  }, [all, savedOsmIds])
 
-  const markers = unsaved.map((place) => (
-    <Marker
-      key={place.osm_id}
-      position={[place.lat, place.lng]}
-      icon={nearbyIcon(place.kind)}
-      eventHandlers={{ click: () => onSelectNearby(place) }}
-    >
-      <Popup>
-        <strong>{place.name}</strong>
-        {place.cuisine && <div className="popup-meta">{place.cuisine}</div>}
-        {place.address && <div className="popup-address">{place.address}</div>}
-      </Popup>
-    </Marker>
-  ))
+  // Clicking a nearby dot doesn't jump straight into the add flow — it opens
+  // a small popup (name, cuisine, an explicit "Add this place" button) so a
+  // stray click doesn't open a modal. MapClusterLayer's unclustered points
+  // are plain GL circles, not React components, so this popup is built with
+  // the maplibre-gl API directly rather than MarkerPopup.
+  const handlePointClick = useCallback(
+    (feature, coordinates) => {
+      if (!map) return
+      popupRef.current?.remove()
+
+      const place = {
+        name: feature.properties.name,
+        lat: coordinates[1],
+        lng: coordinates[0],
+        kind: feature.properties.kind || null,
+        cuisine: feature.properties.cuisine || null,
+        osm_id: feature.properties.osm_id,
+      }
+
+      const container = document.createElement('div')
+      container.className = 'nearby-popup'
+
+      const title = document.createElement('strong')
+      title.textContent = place.name
+      container.appendChild(title)
+
+      if (place.cuisine) {
+        const meta = document.createElement('div')
+        meta.className = 'text-muted-foreground text-sm'
+        meta.textContent = place.cuisine
+        container.appendChild(meta)
+      }
+
+      const addButton = document.createElement('button')
+      addButton.type = 'button'
+      addButton.className = 'nearby-popup-add'
+      addButton.textContent = 'Add this place'
+      addButton.onclick = () => {
+        popupRef.current?.remove()
+        onSelectNearby(place)
+      }
+      container.appendChild(addButton)
+
+      popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: 'none' })
+        .setLngLat(coordinates)
+        .setDOMContent(container)
+        .addTo(map)
+    },
+    [map, onSelectNearby],
+  )
 
   return (
-    <>
-      <ZoomDebug zoom={zoom} count={unsaved.length} />
-      {zoom >= 15 ? (
-        <MarkerClusterGroup
-          iconCreateFunction={clusterIcon}
-          showCoverageOnHover={false}
-          maxClusterRadius={40}
-          disableClusteringAtZoom={17}
-          spiderfyOnMaxZoom
-        >
-          {markers}
-        </MarkerClusterGroup>
-      ) : (
-        markers
-      )}
-    </>
+    <MapClusterLayer
+      data={geojson}
+      pointColor={MUTED_FOREGROUND[resolvedTheme] || MUTED_FOREGROUND.dark}
+      clusterColors={NEARBY_CLUSTER_COLORS[resolvedTheme] || NEARBY_CLUSTER_COLORS.dark}
+      clusterRadius={60}
+      clusterMaxZoom={16}
+      onPointClick={handlePointClick}
+    />
   )
 }
 
@@ -356,89 +321,90 @@ export default function MapView({
   locateState,
   onLocate,
   onDropPin,
+  theme = 'dark',
+  onToggleTheme,
 }) {
-  const [basemap, setBasemap] = useState(
-    () => localStorage.getItem(BASEMAP_KEY) || 'dark',
-  )
-
-  function toggleBasemap() {
-    const next = basemap === 'dark' ? 'light' : 'dark'
-    setBasemap(next)
-    localStorage.setItem(BASEMAP_KEY, next)
-  }
-
+  const [viewport, setViewport] = useState({ zoom: CITY_ZOOM, center: null })
   const savedOsmIds = new Set(entries.map((e) => e.place.osm_id).filter(Boolean))
 
+  const accuracyCircle = useMemo(
+    () => (me ? circlePolygon(me, me.accuracy) : null),
+    [me],
+  )
+
   return (
-    <MapContainer
-      center={FALLBACK_CENTER}
-      zoom={CITY_ZOOM}
-      className={`map basemap-${basemap}`}
-      scrollWheelZoom
-    >
-      <TileLayer
-        key={basemap}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url={BASEMAPS[basemap].url}
-        subdomains="abcd"
-        maxZoom={20}
-        detectRetina /* fills the {r} slot with @2x on high-DPI screens */
-      />
+    <Map center={FALLBACK_CENTER} zoom={CITY_ZOOM} theme={theme} className="map">
+      <MapControls position="top-left" />
+      <ViewportTracker onChange={setViewport} />
       <InitialView entries={entries} me={me} />
       <FocusOnSelection focus={focus} />
       <DropPinHandler onDropPin={onDropPin} />
       <NearbyLayer savedOsmIds={savedOsmIds} onSelectNearby={onSelectNearby} />
 
-      <MarkerClusterGroup
-        iconCreateFunction={clusterIcon}
-        showCoverageOnHover={false}
-        maxClusterRadius={50}
-        disableClusteringAtZoom={17}
-        spiderfyOnMaxZoom
-      >
-        {entries.map((entry) => (
-          <Marker
-            key={entry.id}
-            position={[entry.place.lat, entry.place.lng]}
-            icon={pinIcon(pinTone(entry), entry.place.kind)}
-            eventHandlers={{ click: () => onSelect(entry) }}
-          >
-            <Popup>
-              <strong>{entry.place.name}</strong>
-              <div className="popup-meta">
-                {entry.status === 'visited' ? 'Visited' : 'Want to go'}
-                {entry.rating ? ` · ${'★'.repeat(entry.rating)}` : ''}
-                {entry.place.cuisine ? ` · ${entry.place.cuisine}` : ''}
-              </div>
-              {entry.place.address && <div className="popup-address">{entry.place.address}</div>}
-              {entry.notes && <p className="popup-notes">{entry.notes}</p>}
-            </Popup>
-          </Marker>
-        ))}
-      </MarkerClusterGroup>
+      {entries.map((entry) => (
+        <MapMarker
+          key={entry.id}
+          longitude={entry.place.lng}
+          latitude={entry.place.lat}
+          onClick={() => onSelect(entry)}
+        >
+          <MarkerContent>
+            <span className="pin" style={{ '--pin-color': PIN_COLORS[pinTone(entry)] }}>
+              <Glyph kind={entry.place.kind} size={11} />
+            </span>
+          </MarkerContent>
+          <MarkerPopup>
+            <strong>{entry.place.name}</strong>
+            <div className="text-muted-foreground text-sm">
+              {entry.status === 'visited' ? 'Visited' : 'Want to go'}
+              {entry.rating ? ` · ${'★'.repeat(entry.rating)}` : ''}
+              {entry.place.cuisine ? ` · ${entry.place.cuisine}` : ''}
+            </div>
+            {entry.place.address && (
+              <div className="text-muted-foreground text-sm">{entry.place.address}</div>
+            )}
+            {entry.notes && <p className="mt-1">{entry.notes}</p>}
+          </MarkerPopup>
+        </MapMarker>
+      ))}
 
-      {me && (
-        <>
-          <Circle
-            center={[me.lat, me.lng]}
-            radius={me.accuracy}
-            pathOptions={{ color: '#4a9eff', weight: 1, fillOpacity: 0.12 }}
-          />
-          <Marker position={[me.lat, me.lng]} icon={meIcon} />
-        </>
+      {me && accuracyCircle && (
+        <MapGeoJSON
+          data={accuracyCircle}
+          fillPaint={{ 'fill-color': '#4a9eff', 'fill-opacity': 0.12 }}
+          linePaint={{ 'line-color': '#4a9eff', 'line-width': 1 }}
+        />
       )}
+      {me && (
+        <MapMarker longitude={me.lng} latitude={me.lat}>
+          <MarkerContent>
+            <span className="me-dot" />
+          </MarkerContent>
+        </MapMarker>
+      )}
+
+      <ZoomDebugPortal viewport={viewport} />
 
       <LocateControl state={locateState} onLocate={onLocate} />
 
       <button
         type="button"
-        className="basemap-button"
-        onClick={toggleBasemap}
-        title={BASEMAPS[basemap].label}
-        aria-label={BASEMAPS[basemap].label}
+        className="map-fab basemap-button"
+        onClick={onToggleTheme}
+        title={theme === 'dark' ? 'Switch to the light map' : 'Switch to the dark map'}
+        aria-label={theme === 'dark' ? 'Switch to the light map' : 'Switch to the dark map'}
       >
-        {basemap === 'dark' ? <SunIcon /> : <MoonIcon />}
+        {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
       </button>
-    </MapContainer>
+    </Map>
   )
+}
+
+// ZoomDebug reads zoom off the ViewportTracker's lifted state and the nearby
+// count off useNearbyPlaces directly — kept as its own tiny component so it
+// can live inside <Map> (for useMap-free simplicity it doesn't actually need
+// map context, just re-renders whenever MapView re-renders with new viewport).
+function ZoomDebugPortal({ viewport }) {
+  const all = useNearbyPlaces()
+  return <ZoomDebug zoom={viewport.zoom} count={all.length} />
 }

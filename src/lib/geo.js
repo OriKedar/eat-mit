@@ -34,6 +34,22 @@ export function densestArea(points, radiusKm = 15) {
   }
 }
 
+// Approximates a geodesic circle as a GeoJSON polygon — used for the "my
+// location" accuracy ring, which MapLibre has no built-in primitive for.
+export function circlePolygon(center, radiusMeters, points = 48) {
+  const lat = (center.lat * Math.PI) / 180
+  const dLat = radiusMeters / 111320
+  const dLng = radiusMeters / (111320 * Math.cos(lat))
+
+  const ring = []
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI
+    ring.push([center.lng + dLng * Math.cos(angle), center.lat + dLat * Math.sin(angle)])
+  }
+
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: {} }
+}
+
 export function formatDistance(km) {
   if (km < 1) return `${Math.round(km * 1000)} m`
   if (km < 10) return `${km.toFixed(1)} km`

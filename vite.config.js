@@ -1,12 +1,21 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Repo is served from https://<user>.github.io/eat-mit/, so assets need that base.
 export default defineConfig({
   base: '/eat-mit/',
+  resolve: {
+    // shadcn-generated components (src/components/ui/**) import via "@/...".
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   plugins: [
     react(),
+    tailwindcss(),
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],

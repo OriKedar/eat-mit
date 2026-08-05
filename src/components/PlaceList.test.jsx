@@ -97,6 +97,6 @@ describe('PlaceList', () => {
         me={{ lat: 52.5, lng: 13.4 }}
       />,
     )
-    expect(screen.getByRole('option', { name: 'Distance' })).not.toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Sort: Distance' })).not.toBeDisabled()
   })
 })

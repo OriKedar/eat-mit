@@ -95,4 +95,95 @@ describe('usePlaces', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('user_places')
   })
+
+  it('deleteEntry throws and does not refresh on a query error', async () => {
+    supabase.from.mockReturnValue(makeQuery({ data: [ROW], error: null }))
+    const { result } = renderHook(() => usePlaces('user-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    supabase.from.mockReturnValueOnce(makeQuery({ error: { message: 'delete failed' } }))
+    await expect(result.current.deleteEntry('entry-1')).rejects.toThrow('delete failed')
+  })
+
+  it('updateEntry patches the row then refreshes', async () => {
+    supabase.from.mockReturnValue(makeQuery({ data: [ROW], error: null }))
+    const { result } = renderHook(() => usePlaces('user-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    supabase.from
+      .mockReturnValueOnce(makeQuery({ error: null }))
+      .mockReturnValueOnce(makeQuery({ data: [ROW], error: null }))
+    await act(async () => {
+      await result.current.updateEntry('entry-1', { status: 'visited', rating: 4, notes: '', photo_url: '' })
+    })
+
+    expect(supabase.from).toHaveBeenCalledWith('user_places')
+  })
+
+  it('addEntry reuses an existing place by osm_id instead of inserting a new one', async () => {
+    supabase.from.mockReturnValue(makeQuery({ data: [ROW], error: null }))
+    const { result } = renderHook(() => usePlaces('user-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const placesQuery = makeQuery({ data: [{ id: 'existing-place' }], error: null })
+    const upsertQuery = makeQuery({ error: null })
+    supabase.from
+      .mockReturnValueOnce(placesQuery) // places.select(...).eq(osm_id).limit(1)
+      .mockReturnValueOnce(upsertQuery) // user_places.upsert(...)
+      .mockReturnValueOnce(makeQuery({ data: [ROW], error: null })) // refresh
+
+    await act(async () => {
+      await result.current.addEntry(
+        { name: 'New Place', lat: 1, lng: 2, osm_id: 'way/42' },
+        { status: 'want_to_go', rating: 0, notes: '', photo_url: '' },
+      )
+    })
+
+    expect(placesQuery.insert).not.toHaveBeenCalled()
+    expect(upsertQuery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ place_id: 'existing-place' }),
+      { onConflict: 'user_id,place_id' },
+    )
+  })
+
+  it('addEntry inserts a new place when none matches (or it has no osm_id)', async () => {
+    supabase.from.mockReturnValue(makeQuery({ data: [ROW], error: null }))
+    const { result } = renderHook(() => usePlaces('user-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const insertQuery = makeQuery({ data: { id: 'new-place' }, error: null })
+    const upsertQuery = makeQuery({ error: null })
+    supabase.from
+      .mockReturnValueOnce(insertQuery) // places.insert(...).select().single()
+      .mockReturnValueOnce(upsertQuery) // user_places.upsert(...)
+      .mockReturnValueOnce(makeQuery({ data: [ROW], error: null })) // refresh
+
+    await act(async () => {
+      await result.current.addEntry(
+        { name: 'Hand-placed', lat: 1, lng: 2, osm_id: null },
+        { status: 'visited', rating: 3, notes: 'great', photo_url: '' },
+      )
+    })
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({ name: 'Hand-placed' }))
+    expect(upsertQuery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ place_id: 'new-place' }),
+      { onConflict: 'user_id,place_id' },
+    )
+  })
+
+  it('addEntry throws without upserting when the place lookup errors', async () => {
+    supabase.from.mockReturnValue(makeQuery({ data: [ROW], error: null }))
+    const { result } = renderHook(() => usePlaces('user-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    supabase.from.mockReturnValueOnce(makeQuery({ data: null, error: { message: 'lookup failed' } }))
+
+    await expect(
+      result.current.addEntry(
+        { name: 'X', lat: 1, lng: 2, osm_id: 'way/1' },
+        { status: 'want_to_go', rating: 0, notes: '', photo_url: '' },
+      ),
+    ).rejects.toThrow('lookup failed')
+  })
 })

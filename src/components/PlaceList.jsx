@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { distanceKm, formatDistance } from '../lib/geo'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 const SORTS = {
   recent: { label: 'Recently added', cmp: (a, b) => b.created_at.localeCompare(a.created_at) },
@@ -12,6 +15,12 @@ const SORTS = {
     needsLocation: true,
   },
 }
+
+// Native <select> here on purpose, not shadcn's Select — these are plain
+// filter controls with no need for custom-styled options, and native selects
+// keep keyboard/testing behavior simple (no popup-open choreography).
+const selectClass =
+  'h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
 
 export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDelete, me }) {
   const [statusFilter, setStatusFilter] = useState('all')
@@ -51,21 +60,28 @@ export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDel
   }, [withDistance, statusFilter, cuisineFilter, minRating, activeSort, query])
 
   return (
-    <div className="list-panel">
-      <div className="filters">
-        <input
-          className="filter-search"
+    <div className="p-3.5">
+      <div className="grid gap-2">
+        <Input
           placeholder="Filter my places…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className="filter-row">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <select
+            className={selectClass}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
             <option value="all">All</option>
             <option value="want_to_go">Want to go</option>
             <option value="visited">Visited</option>
           </select>
-          <select value={minRating} onChange={(e) => setMinRating(Number(e.target.value))}>
+          <select
+            className={selectClass}
+            value={minRating}
+            onChange={(e) => setMinRating(Number(e.target.value))}
+          >
             <option value={0}>Any rating</option>
             {[1, 2, 3, 4, 5].map((r) => (
               <option key={r} value={r}>
@@ -73,18 +89,18 @@ export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDel
               </option>
             ))}
           </select>
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            {Object.entries(SORTS).map(([key, { label, needsLocation }]) => (
-              <option key={key} value={key} disabled={needsLocation && !me}>
-                {label}
-                {needsLocation && !me ? ' (locate first)' : ''}
-              </option>
-            ))}
-          </select>
         </div>
+        <select className={selectClass} value={sort} onChange={(e) => setSort(e.target.value)}>
+          {Object.entries(SORTS).map(([key, { label, needsLocation }]) => (
+            <option key={key} value={key} disabled={needsLocation && !me}>
+              Sort: {label}
+              {needsLocation && !me ? ' (locate first)' : ''}
+            </option>
+          ))}
+        </select>
         {cuisines.length > 0 && (
           <select
-            className="cuisine-filter"
+            className={selectClass}
             value={cuisineFilter}
             onChange={(e) => setCuisineFilter(e.target.value)}
           >
@@ -98,54 +114,67 @@ export default function PlaceList({ entries, selectedId, onSelect, onEdit, onDel
         )}
       </div>
 
-      <p className="list-count">
+      <p className="mt-3 mb-1.5 text-xs text-muted-foreground">
         {visible.length} of {entries.length}
       </p>
 
-      <ul className="entry-list">
+      <ul className="m-0 grid list-none gap-2 p-0">
         {visible.map((entry) => (
           <li
             key={entry.id}
-            className={`entry ${entry.id === selectedId ? 'entry-selected' : ''}`}
+            className={`cursor-pointer rounded-lg border bg-card p-3 ${
+              entry.id === selectedId ? 'border-primary' : 'border-transparent'
+            }`}
             onClick={() => onSelect(entry)}
           >
-            <div className="entry-head">
-              <span className={`badge badge-${entry.status}`}>
+            <div className="flex items-center gap-2">
+              <Badge className={`badge-${entry.status} border-none`}>
                 {entry.status === 'visited' ? 'Visited' : 'Want to go'}
-              </span>
-              {entry.rating ? <span className="stars">{'★'.repeat(entry.rating)}</span> : null}
+              </Badge>
+              {entry.rating ? (
+                <span className="text-sm text-destructive">{'★'.repeat(entry.rating)}</span>
+              ) : null}
               {entry._km != null && (
-                <span className="distance">{formatDistance(entry._km)}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {formatDistance(entry._km)}
+                </span>
               )}
             </div>
-            <h3 className="entry-name">{entry.place.name}</h3>
-            {entry.place.cuisine && <span className="cuisine-tag">{entry.place.cuisine}</span>}
-            {entry.place.address && <p className="entry-address">{entry.place.address}</p>}
-            {entry.notes && <p className="entry-notes">{entry.notes}</p>}
-            <div className="entry-actions">
-              <button
-                type="button"
+            <h3 className="mt-1.5 mb-0.5 text-base">{entry.place.name}</h3>
+            {entry.place.cuisine && (
+              <span className="mt-0.5 inline-block rounded-full border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
+                {entry.place.cuisine}
+              </span>
+            )}
+            {entry.place.address && (
+              <p className="mt-0.5 mb-0 text-sm text-muted-foreground">{entry.place.address}</p>
+            )}
+            {entry.notes && <p className="mt-0.5 mb-0 text-sm text-muted-foreground">{entry.notes}</p>}
+            <div className="mt-2.5 flex gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={(e) => {
                   e.stopPropagation()
                   onEdit(entry)
                 }}
               >
                 Edit
-              </button>
-              <button
-                type="button"
-                className="danger"
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
                 onClick={(e) => {
                   e.stopPropagation()
                   onDelete(entry)
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </div>
           </li>
         ))}
-        {!visible.length && <li className="empty">Nothing here yet.</li>}
+        {!visible.length && <li className="py-4 text-muted-foreground">Nothing here yet.</li>}
       </ul>
     </div>
   )

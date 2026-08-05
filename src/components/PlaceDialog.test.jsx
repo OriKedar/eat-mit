@@ -58,6 +58,66 @@ describe('PlaceDialog — add mode', () => {
     expect(searchPlaces).not.toHaveBeenCalled()
   })
 
+  it('lets status, rating, notes and photo URL be set before submitting', async () => {
+    searchPlaces.mockResolvedValue([RESULT])
+    const onSubmit = vi.fn().mockResolvedValue()
+    render(<PlaceDialog mode="add" onClose={() => {}} onSubmit={onSubmit} />)
+
+    await userEvent.type(screen.getByPlaceholderText(/search a restaurant/i), 'trattoria')
+    await userEvent.click(await screen.findByText('Found Place'))
+
+    await userEvent.click(screen.getByRole('radio', { name: /visited/i }))
+    await userEvent.click(screen.getByRole('button', { name: '4 stars' }))
+    await userEvent.type(screen.getByPlaceholderText(/what to order/i), 'The carbonara')
+    await userEvent.type(screen.getByPlaceholderText('https://…'), 'https://example.com/photo.jpg')
+
+    await userEvent.click(screen.getByRole('button', { name: /add place/i }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        RESULT,
+        expect.objectContaining({
+          status: 'visited',
+          rating: 4,
+          notes: 'The carbonara',
+          photo_url: 'https://example.com/photo.jpg',
+        }),
+      ),
+    )
+  })
+
+  it('toggles a star off when clicking the currently-selected rating', async () => {
+    searchPlaces.mockResolvedValue([RESULT])
+    const onSubmit = vi.fn().mockResolvedValue()
+    render(<PlaceDialog mode="add" onClose={() => {}} onSubmit={onSubmit} />)
+
+    await userEvent.type(screen.getByPlaceholderText(/search a restaurant/i), 'trattoria')
+    await userEvent.click(await screen.findByText('Found Place'))
+
+    const threeStars = screen.getByRole('button', { name: '3 stars' })
+    await userEvent.click(threeStars)
+    expect(threeStars).toHaveClass('on')
+    await userEvent.click(threeStars)
+    expect(threeStars).not.toHaveClass('on')
+
+    await userEvent.click(screen.getByRole('button', { name: /add place/i }))
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(RESULT, expect.objectContaining({ rating: 0 })),
+    )
+  })
+
+  it('lets you go back to search after picking a result', async () => {
+    searchPlaces.mockResolvedValue([RESULT])
+    render(<PlaceDialog mode="add" onClose={() => {}} onSubmit={vi.fn()} />)
+
+    await userEvent.type(screen.getByPlaceholderText(/search a restaurant/i), 'trattoria')
+    await userEvent.click(await screen.findByText('Found Place'))
+    expect(screen.getByText('Choose a different place')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Choose a different place'))
+    expect(screen.getByPlaceholderText(/search a restaurant/i)).toBeInTheDocument()
+  })
+
   it('surfaces a save error without closing the dialog', async () => {
     searchPlaces.mockResolvedValue([RESULT])
     const onSubmit = vi.fn().mockRejectedValue(new Error('Save failed'))

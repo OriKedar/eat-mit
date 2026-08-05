@@ -30,7 +30,7 @@ Once the repo exists and you have the Supabase URL + anon key, tell Claude
 Code to:
 
 1. Scaffold a Vite + React project in the repo root.
-2. Install dependencies: `@supabase/supabase-js`, `leaflet`, `react-leaflet`.
+2. Install dependencies: `@supabase/supabase-js`, `maplibre-gl`, Tailwind CSS, shadcn/ui.
 3. Create a `.env` file (and add it to `.gitignore`!) with:
    ```
    VITE_SUPABASE_URL=your-project-url
