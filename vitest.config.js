@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -12,6 +13,7 @@ export default defineConfig({
       // vite-plugin-pwa injects this virtual module at build time; it
       // doesn't exist under Vitest, so point it at a local stand-in.
       'virtual:pwa-register/react': '/src/test/pwa-register-mock.js',
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   test: {
@@ -22,5 +24,12 @@ export default defineConfig({
     environmentOptions: { jsdom: { url: 'http://localhost:3000/eat-mit/' } },
     setupFiles: ['./src/test/setup.js'],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      all: true,
+      reporter: ['text', 'html'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/components/ui/**', 'src/main.jsx', 'src/test/**', 'src/data/**'],
+    },
   },
 })

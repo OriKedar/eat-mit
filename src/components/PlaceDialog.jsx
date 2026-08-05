@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { searchPlaces, reverseGeocode } from '../lib/nominatim'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const EMPTY_DETAILS = { status: 'want_to_go', rating: 0, notes: '', photo_url: '' }
 
@@ -104,112 +109,132 @@ export default function PlaceDialog({ mode, entry, coords, place, onClose, onSub
   const title = editing ? 'Edit entry' : dropped ? 'Add a place here' : 'Add a place'
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-            ×
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
 
         {resolving ? (
-          <p className="hint pad">Looking up that spot…</p>
+          <p className="text-muted-foreground">Looking up that spot…</p>
         ) : !picked ? (
-          <div className="search-step">
-            <input
+          <div className="grid gap-2.5">
+            <Input
               autoFocus
               placeholder="Search a restaurant by name…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            {searching && <p className="hint">Searching…</p>}
-            {searchError && <p className="error">{searchError}</p>}
+            {searching && <p className="text-muted-foreground">Searching…</p>}
+            {searchError && <p className="text-destructive">{searchError}</p>}
             {!searching && query.trim().length >= 3 && !results.length && (
-              <p className="hint">
+              <p className="text-muted-foreground">
                 No results. Try adding the city name — or close this and long-press the map where
                 the place is.
               </p>
             )}
-            <ul className="results">
+            <ul className="m-0 grid max-h-72 list-none gap-1.5 overflow-y-auto p-0">
               {results.map((r) => (
                 <li key={`${r.osm_id}-${r.lat}`}>
-                  <button type="button" onClick={() => setPicked(r)}>
+                  <button
+                    type="button"
+                    className="grid w-full gap-0.5 rounded-lg bg-muted p-2 text-left hover:bg-muted/70"
+                    onClick={() => setPicked(r)}
+                  >
                     <strong>{r.name}</strong>
-                    <span>{r.displayName}</span>
+                    <span className="text-sm text-muted-foreground">{r.displayName}</span>
                   </button>
                 </li>
               ))}
             </ul>
           </div>
         ) : (
-          <form className="details-step" onSubmit={handleSubmit}>
+          <form className="grid gap-3.5" onSubmit={handleSubmit}>
             {dropped ? (
-              <label className="field">
-                Name
-                <input
+              <div className="grid gap-1">
+                <Label>Name</Label>
+                <Input
                   autoFocus
                   required
                   placeholder="What's this place called?"
                   value={picked.name}
                   onChange={(e) => setPicked((p) => ({ ...p, name: e.target.value }))}
                 />
-                {picked.address && <span className="sub">{picked.address}</span>}
-              </label>
+                {picked.address && (
+                  <span className="text-sm text-muted-foreground">{picked.address}</span>
+                )}
+              </div>
             ) : (
-              <div className="picked">
+              <div className="grid gap-0.5 rounded-lg bg-muted p-2.5">
                 <strong>{picked.name}</strong>
-                {picked.address && <span>{picked.address}</span>}
+                {picked.address && (
+                  <span className="text-sm text-muted-foreground">{picked.address}</span>
+                )}
                 {!editing && (
-                  <button type="button" className="link" onClick={() => setPicked(null)}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto justify-self-start p-0 text-sm"
+                    onClick={() => setPicked(null)}
+                  >
                     Choose a different place
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
 
             {!editing && (
-              <label className="field">
-                Cuisine (optional)
-                <input
+              <div className="grid gap-1">
+                <Label>Cuisine (optional)</Label>
+                <Input
                   list="cuisine-suggestions"
                   placeholder="Italian, sushi, ramen…"
                   value={picked.cuisine || ''}
                   onChange={(e) => setPicked((p) => ({ ...p, cuisine: e.target.value }))}
                 />
                 <datalist id="cuisine-suggestions">
-                  {['Italian', 'Japanese', 'Sushi', 'Ramen', 'Thai', 'Vietnamese', 'Indian',
+                  {[
+                    'Italian', 'Japanese', 'Sushi', 'Ramen', 'Thai', 'Vietnamese', 'Indian',
                     'Chinese', 'Korean', 'Mexican', 'Turkish', 'Middle Eastern', 'Greek',
                     'French', 'German', 'Vegan', 'Pizza', 'Burger', 'Breakfast', 'Bakery',
-                    'Cafe', 'Bar'].map((c) => (
+                    'Cafe', 'Bar',
+                  ].map((c) => (
                     <option key={c} value={c} />
                   ))}
                 </datalist>
-              </label>
+              </div>
             )}
 
-            <fieldset className="status-toggle">
-              <legend>Status</legend>
-              {[
-                ['want_to_go', 'Want to go'],
-                ['visited', 'Visited'],
-              ].map(([value, label]) => (
-                <label key={value} className={details.status === value ? 'active' : ''}>
-                  <input
-                    type="radio"
-                    name="status"
-                    value={value}
-                    checked={details.status === value}
-                    onChange={() => setDetails((d) => ({ ...d, status: value }))}
-                  />
-                  {label}
-                </label>
-              ))}
+            <fieldset className="grid gap-1 border-none p-0 m-0">
+              <Label>Status</Label>
+              <div className="flex gap-2">
+                {[
+                  ['want_to_go', 'Want to go'],
+                  ['visited', 'Visited'],
+                ].map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex-1 cursor-pointer rounded-lg border py-2 text-center text-sm ${
+                      details.status === value ? 'border-primary text-primary' : 'border-input'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="status"
+                      value={value}
+                      checked={details.status === value}
+                      onChange={() => setDetails((d) => ({ ...d, status: value }))}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </fieldset>
 
-            <div className="rating-row">
-              <span>Rating</span>
-              <div className="stars-input">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Rating</span>
+              <div className="flex gap-0.5">
                 {[1, 2, 3, 4, 5].map((r) => (
                   <button
                     key={r}
@@ -224,39 +249,39 @@ export default function PlaceDialog({ mode, entry, coords, place, onClose, onSub
               </div>
             </div>
 
-            <label className="field">
-              Notes
-              <textarea
+            <div className="grid gap-1">
+              <Label>Notes</Label>
+              <Textarea
                 rows={3}
                 placeholder="What to order, who recommended it…"
                 value={details.notes}
                 onChange={(e) => setDetails((d) => ({ ...d, notes: e.target.value }))}
               />
-            </label>
+            </div>
 
-            <label className="field">
-              Photo URL (optional)
-              <input
+            <div className="grid gap-1">
+              <Label>Photo URL (optional)</Label>
+              <Input
                 type="url"
                 placeholder="https://…"
                 value={details.photo_url}
                 onChange={(e) => setDetails((d) => ({ ...d, photo_url: e.target.value }))}
               />
-            </label>
+            </div>
 
-            {saveError && <p className="error">{saveError}</p>}
+            {saveError && <p className="text-destructive">{saveError}</p>}
 
-            <div className="modal-actions">
-              <button type="button" onClick={onClose}>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
-              </button>
-              <button type="submit" className="primary" disabled={saving}>
+              </Button>
+              <Button type="submit" disabled={saving}>
                 {saving ? 'Saving…' : editing ? 'Save changes' : 'Add place'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -10,7 +10,7 @@ this project.
 them on a map, and see them in a list.
 
 - [ ] Auth: log in / sign up (email magic link or Google OAuth via Supabase)
-- [ ] Map view (Leaflet) showing all of my saved places as pins
+- [ ] Map view (MapLibre) showing all of my saved places as pins
   - Different pin color/icon for "want to go" vs "visited"
   - Clicking a pin shows name, my rating, my notes
 - [ ] Search bar: search a place by name (Nominatim), see results, pick one

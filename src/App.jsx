@@ -4,6 +4,8 @@ import { usePlaces } from './hooks/usePlaces'
 import { useMockPlaces } from './hooks/useMockPlaces'
 import { useOnline } from './hooks/useOnline'
 import { useGeolocation } from './hooks/useGeolocation'
+import { useTheme } from './hooks/useTheme'
+import { Button } from '@/components/ui/button'
 import Auth from './components/Auth'
 import MapView from './components/MapView'
 import PlaceList from './components/PlaceList'
@@ -20,6 +22,7 @@ const DEV_MOCK = import.meta.env.DEV && !supabaseConfigured
 export default function App() {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
+  const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -35,14 +38,18 @@ export default function App() {
   }, [])
 
   if (!supabaseConfigured && !DEV_MOCK) return <MissingConfig />
-  if (DEV_MOCK) return <Home session={{ user: { id: 'dev-mock-user' } }} />
+  if (DEV_MOCK) {
+    return <Home session={{ user: { id: 'dev-mock-user' } }} theme={theme} onToggleTheme={toggleTheme} />
+  }
   return (
     <>
       <UpdatePrompt />
       {!authReady ? (
-        <div className="boot">Loading…</div>
+        <div className="grid h-full place-content-center p-8 text-center text-muted-foreground">
+          Loading…
+        </div>
       ) : session ? (
-        <Home session={session} />
+        <Home session={session} theme={theme} onToggleTheme={toggleTheme} />
       ) : (
         <Auth />
       )}
@@ -52,9 +59,9 @@ export default function App() {
 
 function MissingConfig() {
   return (
-    <div className="boot boot-error">
+    <div className="mx-auto grid h-full max-w-lg place-content-center gap-2 p-8 text-center">
       <h1>Not configured</h1>
-      <p>
+      <p className="text-muted-foreground">
         Copy <code>.env.example</code> to <code>.env</code> and fill in{' '}
         <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> from your Supabase
         project, then restart the dev server.
@@ -63,7 +70,7 @@ function MissingConfig() {
   )
 }
 
-function Home({ session }) {
+function Home({ session, theme, onToggleTheme }) {
   const userId = session.user.id
   // Reads the module-level constant directly (not a prop) so the minifier
   // can fold this to `usePlaces` and drop useMockPlaces from prod bundles
@@ -88,36 +95,40 @@ function Home({ session }) {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <h1>Food Map</h1>
-        <div className="topbar-right">
-          <button className="primary" onClick={() => setDialog({ mode: 'add' })}>
-            + Add place
-          </button>
-          {!DEV_MOCK && <button onClick={() => supabase.auth.signOut()}>Sign out</button>}
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5">
+        <h1 className="m-0 text-[1.05rem]">Food Map</h1>
+        <div className="flex gap-2">
+          <Button onClick={() => setDialog({ mode: 'add' })}>+ Add place</Button>
+          {!DEV_MOCK && (
+            <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+              Sign out
+            </Button>
+          )}
         </div>
       </header>
 
       {!online && (
-        <p className="banner banner-offline">
+        <p className="m-0 flex items-center justify-between gap-3 bg-amber-950/40 px-4 py-2.5 text-[0.88rem] text-amber-200 dark:bg-amber-950/40">
           Offline — the map still works, but saving and searching need a connection.
         </p>
       )}
 
       {error && (
-        <p className="error banner">
+        <p className="m-0 flex items-center justify-between gap-3 bg-destructive/15 px-4 py-2.5 text-[0.88rem] text-destructive">
           {error}
-          <button className="banner-retry" onClick={refresh}>
+          <Button size="sm" variant="outline" onClick={refresh}>
             Retry
-          </button>
+          </Button>
         </p>
       )}
 
-      <nav className="mobile-tabs">
+      <nav className="mobile-tabs border-b border-border bg-card">
         {['map', 'list'].map((tab) => (
           <button
             key={tab}
-            className={mobileTab === tab ? 'active' : ''}
+            className={`border-none bg-transparent px-0 py-2.5 text-muted-foreground ${
+              mobileTab === tab ? 'text-primary shadow-[inset_0_-2px_0_var(--primary)]' : ''
+            }`}
             onClick={() => setMobileTab(tab)}
           >
             {tab === 'map' ? 'Map' : 'List'}
@@ -125,7 +136,7 @@ function Home({ session }) {
         ))}
       </nav>
 
-      <main className={`layout show-${mobileTab}`}>
+      <main className={`layout show-${mobileTab} grid min-h-0 flex-1 md:grid-cols-[1fr_22rem]`}>
         <section className="map-pane">
           <MapView
             entries={entries}
@@ -136,13 +147,15 @@ function Home({ session }) {
             locateState={locateState}
             onLocate={locate}
             onDropPin={(coords) => setDialog({ mode: 'pin', coords })}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
           />
         </section>
-        <aside className="list-pane">
+        <aside className="list-pane border-l border-border bg-card">
           {loading && !entries.length ? (
-            <ul className="skeleton-list">
+            <ul className="m-0 grid list-none gap-2 p-3.5">
               {[0, 1, 2, 3].map((i) => (
-                <li key={i} className="skeleton" />
+                <li key={i} className="skeleton h-22" />
               ))}
             </ul>
           ) : entries.length ? (
@@ -155,12 +168,10 @@ function Home({ session }) {
               me={me}
             />
           ) : (
-            <div className="empty-state">
+            <div className="grid justify-items-center gap-3 p-10 text-center text-muted-foreground">
               <p>No places yet.</p>
-              <button className="primary" onClick={() => setDialog({ mode: 'add' })}>
-                Add your first
-              </button>
-              <p className="hint">Or long-press anywhere on the map to drop a pin.</p>
+              <Button onClick={() => setDialog({ mode: 'add' })}>Add your first</Button>
+              <p className="text-sm">Or long-press anywhere on the map to drop a pin.</p>
             </div>
           )}
         </aside>

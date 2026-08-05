@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { distanceKm, densestArea, formatDistance } from './geo'
+import { distanceKm, densestArea, formatDistance, circlePolygon } from './geo'
 
 describe('distanceKm', () => {
   it('is zero for identical points', () => {
@@ -72,5 +72,24 @@ describe('formatDistance', () => {
 
   it('handles zero', () => {
     expect(formatDistance(0)).toBe('0 m')
+  })
+})
+
+describe('circlePolygon', () => {
+  it('produces a closed ring', () => {
+    const feature = circlePolygon({ lat: 52.5, lng: 13.4 }, 100)
+    const ring = feature.geometry.coordinates[0]
+    expect(ring[0]).toEqual(ring[ring.length - 1])
+  })
+
+  it('keeps every vertex roughly the given radius from the center', () => {
+    const center = { lat: 52.5, lng: 13.4 }
+    const feature = circlePolygon(center, 500, 16)
+    const ring = feature.geometry.coordinates[0]
+    for (const [lng, lat] of ring) {
+      const km = distanceKm(center, { lat, lng })
+      expect(km).toBeGreaterThan(0.45)
+      expect(km).toBeLessThan(0.55)
+    }
   })
 })

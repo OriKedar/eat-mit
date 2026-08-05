@@ -8,7 +8,7 @@
 │   (static hosting)   │◄───────►│  Postgres + Auth +   │
 │                      │  HTTPS  │  Row Level Security  │
 │  React + Vite app    │         │                      │
-│  Leaflet map         │         └──────────────────────┘
+│  MapLibre GL map     │         └──────────────────────┘
 └──────────┬───────────┘
            │
            ▼
@@ -54,16 +54,30 @@ with real users.
   auto-resumes (a few seconds delay) on the next request. There are also hard
   caps on database size and bandwidth, but a hobby project won't come close.
 
-## Why Leaflet + OpenStreetMap instead of Google Maps
+## Why MapLibre + OpenStreetMap instead of Google Maps
 
 Google Maps has richer place metadata (hours, photos, ratings) but requires a
 billing account on file and has real (if small at this scale) cost risk if
-usage ever grows. Leaflet + OSM is fully free with no API key and no usage
-cap. The honest tradeoff: some restaurants — especially smaller or newer ones —
-will have thin or missing data in OSM (no photo, no hours). The plan for v1 is
-to let the data model store user-provided details (your own notes/photo) so
-missing OSM data isn't a blocker. This can be revisited later if it becomes a
-real pain point.
+usage ever grows. MapLibre GL + OSM (via CARTO's free vector tiles) is fully
+free with no API key and no usage cap. The honest tradeoff: some restaurants —
+especially smaller or newer ones — will have thin or missing data in OSM (no
+photo, no hours). The plan for v1 is to let the data model store user-provided
+details (your own notes/photo) so missing OSM data isn't a blocker. This can be
+revisited later if it becomes a real pain point.
+
+Map components (markers, popups, clustering) come from
+[mapcn](https://www.mapcn.dev), a shadcn-style registry of copy-paste
+MapLibre components — same install model as the rest of the UI (see below),
+so the map isn't a separate styling system from the rest of the app.
+
+## Why shadcn/ui + Tailwind for the rest of the UI
+
+Copy-paste components (not an npm dependency) mean the actual component code
+lives in `src/components/ui/` and is fully ours to edit — no fighting a
+third-party library's API to reskin a button. Tailwind utility classes plus a
+small set of CSS variables (`src/index.css`) keep dark/light theming and the
+app's warm color palette in one place, shared between the map and every other
+component.
 
 ## Why React + Vite
 

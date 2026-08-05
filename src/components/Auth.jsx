@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { supabase, appUrl } from '../lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 
 export default function Auth() {
   const [email, setEmail] = useState('')
@@ -25,37 +28,41 @@ export default function Auth() {
   }
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card">
-        <h1 className="auth-title">Food Map</h1>
-        <p className="auth-sub">Restaurants you want to try, and ones you already did.</p>
+    <div className="grid h-full place-items-center p-6">
+      <Card className="w-full max-w-96">
+        <CardHeader>
+          <CardTitle className="text-xl">Food Map</CardTitle>
+          <CardDescription>Restaurants you want to try, and ones you already did.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {status.kind === 'sent' ? (
+            <p className="text-muted-foreground">
+              Check <strong className="text-foreground">{email}</strong> for a sign-in link. You
+              can close this tab.
+            </p>
+          ) : (
+            <form onSubmit={sendMagicLink} className="grid gap-2.5">
+              <Input
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Button type="submit" disabled={status.kind === 'sending'}>
+                {status.kind === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+              </Button>
+            </form>
+          )}
 
-        {status.kind === 'sent' ? (
-          <p className="auth-sent">
-            Check <strong>{email}</strong> for a sign-in link. You can close this tab.
-          </p>
-        ) : (
-          <form onSubmit={sendMagicLink} className="auth-form">
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <button type="submit" disabled={status.kind === 'sending'}>
-              {status.kind === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
-            </button>
-          </form>
-        )}
+          <Button variant="outline" onClick={signInWithGoogle} type="button">
+            Continue with Google
+          </Button>
 
-        <button className="auth-google" onClick={signInWithGoogle} type="button">
-          Continue with Google
-        </button>
-
-        {status.kind === 'error' && <p className="auth-error">{status.message}</p>}
-      </div>
+          {status.kind === 'error' && <p className="text-destructive">{status.message}</p>}
+        </CardContent>
+      </Card>
     </div>
   )
 }
